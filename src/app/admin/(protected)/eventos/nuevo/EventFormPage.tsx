@@ -724,7 +724,7 @@ export default function EventFormPage({
                 accept="image/*"
                 maxSize={5}
                 label="Subir imagen principal"
-                hint="Recomendado: 1200x800px"
+                hint="Recomendado: 1920×640px (3:1 horizontal)"
                 aspectRatio="wide"
               />
             </div>
@@ -736,7 +736,7 @@ export default function EventFormPage({
                 accept="image/*"
                 maxSize={5}
                 label="Subir banner"
-                hint="Recomendado: 1920x600px"
+                hint="Recomendado: 1920×640px (3:1 horizontal)"
                 aspectRatio="wide"
               />
             </div>
@@ -818,7 +818,7 @@ export default function EventFormPage({
                 accept="image/*"
                 maxSize={5}
                 label="Subir foto de la franela"
-                hint="Se mostrará en la web pública del evento"
+                hint="Recomendado: 600×800px (3:4 retrato) o 800×800px (1:1 cuadrada)"
                 aspectRatio="square"
               />
             </div>
