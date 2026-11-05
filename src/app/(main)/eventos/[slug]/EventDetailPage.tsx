@@ -45,6 +45,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { RegistrationDialog } from "@/components/RegistrationDialog";
+import { SponsorsCarousel } from "@/components/SponsorsCarousel";
 
 // ============================================================
 // Interfaces
@@ -69,9 +70,14 @@ interface EventData {
   featured: boolean;
   organizer: string;
   prizes: string;
+  prizesImages?: string;        // JSON array de base64
   rules: string;
+  rulesFile?: string;           // base64 PDF/imagen
   kitInfo: string;
+  kitInfoDetails?: string;      // contenido detallado del kit
+  shirtImage?: string;          // base64 imagen franela
   sponsors: string;
+  sponsorsLogos?: string;       // JSON array de {logo, name, url}
   sportType: string;
   ageCalcMode: string;
   categoryInterval: number;
@@ -554,6 +560,54 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
                 </motion.section>
               )}
 
+              {/* ========== FOTO OFICIAL DE LA FRANELA ========== */}
+              {event.shirtImage && (
+                <motion.section
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.22 }}
+                >
+                  <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+                    <Shirt className="size-5 text-red-500" />
+                    Franela Oficial del Evento
+                  </h2>
+                  <div className="bg-white rounded-2xl border p-6 flex flex-col sm:flex-row gap-6 items-center">
+                    <img
+                      src={event.shirtImage}
+                      alt="Franela oficial"
+                      className="w-full sm:w-64 h-auto rounded-xl object-contain"
+                    />
+                    {event.kitInfoDetails && (
+                      <div className="flex-1">
+                        <h3 className="font-semibold text-foreground mb-2">Contenido del Kit</h3>
+                        <p className="text-sm text-muted-foreground whitespace-pre-line">
+                          {event.kitInfoDetails}
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </motion.section>
+              )}
+
+              {/* ========== KIT DETAILS (solo texto, sin imagen) ========== */}
+              {!event.shirtImage && event.kitInfoDetails && (
+                <motion.section
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: 0.22 }}
+                >
+                  <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+                    <Package className="size-5 text-red-500" />
+                    Contenido del Kit
+                  </h2>
+                  <div className="bg-white rounded-2xl border p-6">
+                    <p className="text-sm text-muted-foreground whitespace-pre-line">
+                      {event.kitInfoDetails}
+                    </p>
+                  </div>
+                </motion.section>
+              )}
+
               {/* ========== KIT DE PARTICIPANTE — VISUAL CARDS ========== */}
               {kitItems.length > 0 && (
                 <motion.section
@@ -698,6 +752,43 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
                 </motion.section>
               )}
 
+              {/* Prize Images Gallery */}
+              {event.prizesImages && (() => {
+                try {
+                  const imgs = JSON.parse(event.prizesImages);
+                  if (!Array.isArray(imgs) || imgs.length === 0) return null;
+                  return (
+                    <motion.section
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: 0.32 }}
+                    >
+                      <h2 className="text-xl font-bold text-foreground flex items-center gap-2 mb-4">
+                        <Camera className="size-5 text-yellow-500" />
+                        Afiches de Premios
+                      </h2>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {imgs.map((img: string, idx: number) => (
+                          <motion.div
+                            key={idx}
+                            initial={{ opacity: 0, scale: 0.95 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            transition={{ delay: 0.35 + idx * 0.1 }}
+                            className="rounded-xl overflow-hidden border border-gray-200 shadow-sm hover:shadow-md transition-shadow"
+                          >
+                            <img
+                              src={img}
+                              alt={`Afich de premios ${idx + 1}`}
+                              className="w-full h-auto object-contain bg-gray-50"
+                            />
+                          </motion.div>
+                        ))}
+                      </div>
+                    </motion.section>
+                  );
+                } catch { return null; }
+              })()}
+
               {/* Rules */}
               {event.rules && (
                 <motion.section
@@ -713,12 +804,29 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
                     <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line leading-relaxed">
                       {event.rules}
                     </div>
+
+                    {/* Reglamento completo descargable (PDF o imagen) */}
+                    {event.rulesFile && (
+                      <div className="mt-4 pt-4 border-t border-gray-200/50">
+                        <a
+                          href={event.rulesFile}
+                          download={`reglamento-${event.slug}.pdf`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg text-sm font-medium transition-colors shadow-sm"
+                        >
+                          <FileText className="size-4" />
+                          Descargar Reglamento Completo
+                          <ArrowRight className="size-4" />
+                        </a>
+                      </div>
+                    )}
                   </div>
                 </motion.section>
               )}
 
-              {/* Sponsors */}
-              {event.sponsors && (
+              {/* Sponsors — Carrusel de logos + texto */}
+              {(event.sponsorsLogos || event.sponsors) && (
                 <motion.section
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -728,11 +836,24 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
                     <Star className="size-5 text-red-500" />
                     Patrocinadores
                   </h2>
-                  <div className="bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl p-6 border border-gray-200/50">
-                    <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line leading-relaxed">
-                      {event.sponsors}
+
+                  {/* Carrusel animado de logos */}
+                  {event.sponsorsLogos && (() => {
+                    try {
+                      const logos = JSON.parse(event.sponsorsLogos);
+                      if (!Array.isArray(logos) || logos.length === 0) return null;
+                      return <SponsorsCarousel sponsorsLogos={event.sponsorsLogos} />;
+                    } catch { return null; }
+                  })()}
+
+                  {/* Texto adicional de patrocinadores */}
+                  {event.sponsors && (
+                    <div className="mt-4 bg-gradient-to-br from-gray-50 to-gray-100/50 rounded-2xl p-6 border border-gray-200/50">
+                      <div className="prose prose-sm max-w-none text-muted-foreground whitespace-pre-line leading-relaxed">
+                        {event.sponsors}
+                      </div>
                     </div>
-                  </div>
+                  )}
                 </motion.section>
               )}
 
