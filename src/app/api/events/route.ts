@@ -83,7 +83,6 @@ export async function POST(request: NextRequest) {
         date: new Date(date),
         location,
         distance,
-        category: category || "running",
         sportType: sportType || category || "running",
         imageUrl: imageUrl || "",
         bannerImage: bannerImage || "",
