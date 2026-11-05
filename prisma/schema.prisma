@@ -76,6 +76,8 @@ model Event {
   hasShirtOption String  @default("OPTIONAL") // 'INCLUDED', 'OPTIONAL', 'NONE'
   shirtPrice     Float?  // Precio adicional de la franela si es OPTIONAL
   hasShirt       Boolean @default(true) // legacy compat
+  shirtImage     String  @default("")   // Imagen base64 de la franela/jersey oficial
+  kitInfoDetails String  @default("")   // Contenido detallado del kit (qué incluye)
 
   // --- Precios y Capacidad ---
   price          Float   @default(0)
@@ -94,10 +96,13 @@ model Event {
   status    String   @default("upcoming") // upcoming, active, finished, cancelled
   featured  Boolean  @default(false)
   organizer String   @default("")
-  prizes    String   @default("")
-  rules     String   @default("")
-  kitInfo   String   @default("")
-  sponsors  String   @default("")
+  prizes    String   @default("")   // Texto de premios (editor)
+  prizesImages String @default("[]") // JSON array de imágenes base64 de premios/afiches
+  rules     String   @default("")   // Texto del reglamento
+  rulesFile String   @default("")   // base64 del PDF o imagen del reglamento completo
+  kitInfo   String   @default("")   // Texto info del kit (legacy)
+  sponsors  String   @default("")   // Texto de patrocinadores (legacy)
+  sponsorsLogos String @default("[]") // JSON array de {logo, name, url} de patrocinadores
 
   // --- Relaciones ---
   registrations Registration[]

@@ -64,6 +64,7 @@ export async function POST(request: NextRequest) {
       organizer, prizes, rules, kitInfo, sponsors, categories,
       ageCalcMode, categoryInterval, hasShirt, hasShirtOption, shirtPrice,
       requiresFederationLicense, bannerHorizontalUrl, bannerVerticalUrl,
+      shirtImage, kitInfoDetails, prizesImages, rulesFile, sponsorsLogos,
     } = body;
 
     if (!title || !slug || !date || !location || !distance || !category) {
@@ -90,6 +91,8 @@ export async function POST(request: NextRequest) {
         bannerVerticalUrl: bannerVerticalUrl || null,
         hasShirtOption: hasShirtOption || "OPTIONAL",
         shirtPrice: shirtPrice ?? null,
+        shirtImage: shirtImage || "",
+        kitInfoDetails: kitInfoDetails || "",
         price: price || 0,
         priceBs: priceBs || 0,
         maxParticipants: maxParticipants || 500,
@@ -97,9 +100,12 @@ export async function POST(request: NextRequest) {
         status: status || "upcoming",
         organizer: organizer || "",
         prizes: prizes || "",
+        prizesImages: prizesImages || "[]",
         rules: rules || "",
+        rulesFile: rulesFile || "",
         kitInfo: kitInfo || "",
         sponsors: sponsors || "",
+        sponsorsLogos: sponsorsLogos || "[]",
         categories: categories || "",
         ageCalcMode: ageCalcMode || "calendar_year",
         categoryInterval: categoryInterval || "10",

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import {
   Save,
@@ -16,6 +16,12 @@ import {
   FileText,
   Package,
   HandCoins,
+  UploadCloud,
+  Users,
+  Bike,
+  Activity,
+  Zap,
+  Radio,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -40,9 +46,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { FileUpload } from "@/components/ui/file-upload";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
+import {
+  getCategoryPresets,
+  type CategoryPreset,
+  type CategoryOption,
+} from "@/lib/categories";
 
 // ============================================================
 // Types
@@ -73,6 +85,8 @@ interface EventFormData {
   hasShirtOption: string;
   shirtPrice: string;
   hasShirt: boolean;
+  shirtImage: string;          // base64 image of shirt
+  kitInfoDetails: string;      // detailed kit contents
   price: string;
   priceBs: string;
   maxParticipants: string;
@@ -83,9 +97,12 @@ interface EventFormData {
   featured: boolean;
   organizer: string;
   prizes: string;
+  prizesImages: string;        // JSON array of base64 images
   rules: string;
+  rulesFile: string;           // base64 PDF/image of rules
   kitInfo: string;
   sponsors: string;
+  sponsorsLogos: string;       // JSON array of {logo, name, url}
 }
 
 interface EventFormPageProps {
@@ -116,6 +133,8 @@ const defaultFormData: EventFormData = {
   hasShirtOption: "OPTIONAL",
   shirtPrice: "",
   hasShirt: true,
+  shirtImage: "",
+  kitInfoDetails: "",
   price: "0",
   priceBs: "0",
   maxParticipants: "500",
@@ -126,9 +145,12 @@ const defaultFormData: EventFormData = {
   featured: false,
   organizer: "",
   prizes: "",
+  prizesImages: "[]",
   rules: "",
+  rulesFile: "",
   kitInfo: "",
   sponsors: "",
+  sponsorsLogos: "[]",
 };
 
 // ============================================================
@@ -226,6 +248,51 @@ export default function EventFormPage({
     initialCategories || []
   );
   const [saving, setSaving] = useState(false);
+
+  // Category system state
+  const [selectedPresetId, setSelectedPresetId] = useState<string>("");
+  const [showSpecialCategoryForm, setShowSpecialCategoryForm] = useState(false);
+  const [newSpecialCat, setNewSpecialCat] = useState<Omit<CategoryRow, "id">>({
+    name: "",
+    gender: "MIXTO",
+    minAge: 0,
+    maxAge: 99,
+    distanceKm: "",
+    price: "0",
+  });
+
+  // Available presets based on selected sport type
+  const availablePresets: CategoryPreset[] = useMemo(
+    () => getCategoryPresets(formData.sportType),
+    [formData.sportType]
+  );
+
+  // Available categories from the selected preset
+  const availableCategories: CategoryOption[] = useMemo(() => {
+    if (!selectedPresetId) return [];
+    const preset = availablePresets.find((p) => p.id === selectedPresetId);
+    return preset?.categories || [];
+  }, [selectedPresetId, availablePresets]);
+
+  // Load a preset's categories into the active list
+  const handleLoadPreset = (presetId: string) => {
+    const preset = availablePresets.find((p) => p.id === presetId);
+    if (!preset) return;
+    const basePrice = parseFloat(formData.price) || 0;
+    const rows: CategoryRow[] = preset.categories.map((c) => ({
+      name: c.label,
+      minAge: c.minAge,
+      maxAge: c.maxAge,
+      gender: c.gender || "MIXTO",
+      distanceKm: "",
+      price: String(basePrice),
+    }));
+    setCategories(rows);
+    toast({
+      title: "Plantilla cargada",
+      description: `${preset.label}: ${rows.length} categorías`,
+    });
+  };
 
   // Auto-generate slug from title
   useEffect(() => {
@@ -328,6 +395,8 @@ export default function EventFormPage({
         hasShirtOption: formData.hasShirtOption,
         shirtPrice: formData.hasShirtOption === "OPTIONAL" ? parseFloat(formData.shirtPrice) || null : null,
         hasShirt: formData.hasShirtOption !== "NONE",
+        shirtImage: formData.shirtImage,
+        kitInfoDetails: formData.kitInfoDetails,
         price: parseFloat(formData.price) || 0,
         priceBs: parseFloat(formData.priceBs) || 0,
         maxParticipants: parseInt(formData.maxParticipants) || 500,
@@ -338,9 +407,12 @@ export default function EventFormPage({
         featured: formData.featured,
         organizer: formData.organizer,
         prizes: formData.prizes,
+        prizesImages: formData.prizesImages,
         rules: formData.rules,
+        rulesFile: formData.rulesFile,
         kitInfo: formData.kitInfo,
         sponsors: formData.sponsors,
+        sponsorsLogos: formData.sponsorsLogos,
         category: formData.sportType,
         categories: "",
       };
@@ -645,43 +717,51 @@ export default function EventFormPage({
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="imageUrl">Imagen URL</Label>
-              <Input
-                id="imageUrl"
+              <Label>Imagen Principal del Evento</Label>
+              <FileUpload
                 value={formData.imageUrl}
-                onChange={(e) => updateField("imageUrl", e.target.value)}
-                placeholder="/event-image.jpg"
+                onChange={(base64) => updateField("imageUrl", base64)}
+                accept="image/*"
+                maxSize={5}
+                label="Subir imagen principal"
+                hint="Recomendado: 1200x800px"
+                aspectRatio="wide"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bannerImage">Banner Image URL</Label>
-              <Input
-                id="bannerImage"
+              <Label>Banner del Evento</Label>
+              <FileUpload
                 value={formData.bannerImage}
-                onChange={(e) => updateField("bannerImage", e.target.value)}
-                placeholder="/banner.jpg"
+                onChange={(base64) => updateField("bannerImage", base64)}
+                accept="image/*"
+                maxSize={5}
+                label="Subir banner"
+                hint="Recomendado: 1920x600px"
+                aspectRatio="wide"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bannerHorizontalUrl">Banner Horizontal (Landing)</Label>
-              <Input
-                id="bannerHorizontalUrl"
-                value={formData.bannerHorizontalUrl}
-                onChange={(e) =>
-                  updateField("bannerHorizontalUrl", e.target.value)
-                }
-                placeholder="/banner-horizontal.jpg"
+              <Label>Banner Horizontal (Landing)</Label>
+              <FileUpload
+                value={formData.bannerHorizontalUrl || ""}
+                onChange={(base64) => updateField("bannerHorizontalUrl", base64)}
+                accept="image/*"
+                maxSize={5}
+                label="Subir banner horizontal"
+                hint="Para landing del evento"
+                aspectRatio="wide"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="bannerVerticalUrl">Banner Vertical (Móvil)</Label>
-              <Input
-                id="bannerVerticalUrl"
-                value={formData.bannerVerticalUrl}
-                onChange={(e) =>
-                  updateField("bannerVerticalUrl", e.target.value)
-                }
-                placeholder="/banner-vertical.jpg"
+              <Label>Banner Vertical (Móvil)</Label>
+              <FileUpload
+                value={formData.bannerVerticalUrl || ""}
+                onChange={(base64) => updateField("bannerVerticalUrl", base64)}
+                accept="image/*"
+                maxSize={5}
+                label="Subir banner vertical"
+                hint="Para vista móvil"
+                aspectRatio="tall"
               />
             </div>
           </div>
@@ -728,6 +808,32 @@ export default function EventFormPage({
                 />
               </div>
             )}
+
+            {/* Foto oficial de la franela/jersey */}
+            <div className="space-y-2 md:col-span-2">
+              <Label>Foto Oficial de la Franela / Jersey</Label>
+              <FileUpload
+                value={formData.shirtImage}
+                onChange={(base64) => updateField("shirtImage", base64)}
+                accept="image/*"
+                maxSize={5}
+                label="Subir foto de la franela"
+                hint="Se mostrará en la web pública del evento"
+                aspectRatio="square"
+              />
+            </div>
+
+            {/* Contenido detallado del kit */}
+            <div className="space-y-2 md:col-span-2">
+              <Label htmlFor="kitInfoDetails">Contenido del Kit</Label>
+              <Textarea
+                id="kitInfoDetails"
+                value={formData.kitInfoDetails}
+                onChange={(e) => updateField("kitInfoDetails", e.target.value)}
+                placeholder="Detalle qué incluye el kit: medalla, número, chip de cronometraje, hidratación, etc."
+                rows={4}
+              />
+            </div>
           </div>
         </Card>
       </motion.div>
@@ -737,10 +843,10 @@ export default function EventFormPage({
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <HandCoins className="size-5 text-red-500" />
-            Información Organizacional
+            Información Organizacional, Premios y Reglas
           </h2>
 
-          <div className="space-y-4">
+          <div className="space-y-6">
             <div className="space-y-2">
               <Label htmlFor="organizer">Organizador</Label>
               <Input
@@ -750,51 +856,80 @@ export default function EventFormPage({
                 placeholder="Nombre del organizador"
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="prizes">
-                <span className="flex items-center gap-1">
-                  <Trophy className="size-3" /> Premios
-                </span>
+
+            {/* === MÓDULO DE PREMIOS === */}
+            <div className="space-y-3 border rounded-lg p-4 bg-amber-50/30">
+              <Label className="flex items-center gap-1 text-base font-semibold">
+                <Trophy className="size-4 text-amber-600" /> Módulo de Premios
               </Label>
               <Textarea
-                id="prizes"
                 value={formData.prizes}
                 onChange={(e) => updateField("prizes", e.target.value)}
-                rows={2}
+                placeholder="Describe los premios por categoría: 1er lugar $500, 2do lugar $300, etc."
+                rows={4}
               />
+              <div>
+                <Label className="text-sm">Imágenes explicativas / Afiches de premios</Label>
+                <MultiImageUpload
+                  value={formData.prizesImages}
+                  onChange={(json) => updateField("prizesImages", json)}
+                  hint="Sube afiches o imágenes explicativas de los premios"
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="rules">
-                <span className="flex items-center gap-1">
-                  <FileText className="size-3" /> Reglas
-                </span>
+
+            {/* === MÓDULO DE REGLAS / REGLAMENTO === */}
+            <div className="space-y-3 border rounded-lg p-4 bg-blue-50/30">
+              <Label className="flex items-center gap-1 text-base font-semibold">
+                <FileText className="size-4 text-blue-600" /> Módulo de Reglas / Reglamento
               </Label>
               <Textarea
-                id="rules"
                 value={formData.rules}
                 onChange={(e) => updateField("rules", e.target.value)}
-                rows={2}
+                placeholder="Escribe las reglas principales del evento o un resumen del reglamento"
+                rows={4}
               />
+              <div>
+                <Label className="text-sm">Reglamento completo (PDF o imagen)</Label>
+                <FileUpload
+                  value={formData.rulesFile}
+                  onChange={(base64) => updateField("rulesFile", base64)}
+                  accept=".pdf,image/*"
+                  maxSize={10}
+                  label="Subir reglamento (PDF o imagen)"
+                  hint="Archivo descargable visible para los participantes"
+                  aspectRatio="auto"
+                />
+              </div>
             </div>
+
+            {/* === INFO DEL KIT (legacy) === */}
             <div className="space-y-2">
-              <Label htmlFor="kitInfo">
-                <span className="flex items-center gap-1">
-                  <Package className="size-3" /> Info del Kit
-                </span>
+              <Label htmlFor="kitInfo" className="flex items-center gap-1">
+                <Package className="size-3" /> Info del Kit (resumen)
               </Label>
               <Textarea
                 id="kitInfo"
                 value={formData.kitInfo}
                 onChange={(e) => updateField("kitInfo", e.target.value)}
+                placeholder="Resumen breve del kit"
                 rows={2}
               />
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="sponsors">Patrocinadores</Label>
+
+            {/* === MÓDULO DE PATROCINADORES === */}
+            <div className="space-y-3 border rounded-lg p-4 bg-green-50/30">
+              <Label className="flex items-center gap-1 text-base font-semibold">
+                <Users className="size-4 text-green-600" /> Módulo de Patrocinadores
+              </Label>
+              <SponsorsLogosEditor
+                value={formData.sponsorsLogos}
+                onChange={(json) => updateField("sponsorsLogos", json)}
+              />
               <Textarea
-                id="sponsors"
                 value={formData.sponsors}
                 onChange={(e) => updateField("sponsors", e.target.value)}
+                placeholder="Información adicional de patrocinadores (texto)"
                 rows={2}
               />
             </div>
@@ -807,12 +942,82 @@ export default function EventFormPage({
         <Card className="p-6">
           <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
             <Sparkles className="size-5 text-red-500" />
-            Generador de Categorías
+            Módulo y Generador de Categorías
           </h2>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Discipline selector + presets */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-4">
             <div className="space-y-2">
-              <Label>Intervalo de Categorías</Label>
+              <Label>Disciplina / Tipo de Deporte</Label>
+              <Select
+                value={formData.sportType}
+                onValueChange={(v) => {
+                  updateField("sportType", v);
+                  setSelectedPresetId("");
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="running">
+                    <span className="flex items-center gap-2">
+                      <Activity className="size-4" /> Atletismo / Carreras
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="mtb">
+                    <span className="flex items-center gap-2">
+                      <Bike className="size-4" /> Ciclismo MTB
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="mtb-ruta">
+                    <span className="flex items-center gap-2">
+                      <Bike className="size-4" /> Ciclismo Ruta
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="triathlon">
+                    <span className="flex items-center gap-2">
+                      <Zap className="size-4" /> Triatlón
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="trail">
+                    <span className="flex items-center gap-2">
+                      <Activity className="size-4" /> Trail / Trekking
+                    </span>
+                  </SelectItem>
+                  <SelectItem value="virtual">
+                    <span className="flex items-center gap-2">
+                      <Radio className="size-4" /> Virtual
+                    </span>
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Plantilla de Categorías</Label>
+              <Select
+                value={selectedPresetId}
+                onValueChange={(v) => {
+                  setSelectedPresetId(v);
+                  handleLoadPreset(v);
+                }}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Seleccionar plantilla..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {availablePresets.map((preset) => (
+                    <SelectItem key={preset.id} value={preset.id}>
+                      {preset.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Intervalo de Edad</Label>
               <Select
                 value={formData.categoryInterval}
                 onValueChange={(v) => updateField("categoryInterval", v)}
@@ -826,24 +1031,100 @@ export default function EventFormPage({
                 </SelectContent>
               </Select>
             </div>
-            <div className="space-y-2">
-              <Label>Modo de Cálculo de Edad</Label>
-              <Select
-                value={formData.ageCalcMode}
-                onValueChange={(v) => updateField("ageCalcMode", v)}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="calendar_year">Año calendario</SelectItem>
-                  <SelectItem value="event_date">Fecha del evento</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
           </div>
 
-          {/* Generate buttons */}
+          {/* Available categories from preset with checkboxes */}
+          {availableCategories.length > 0 && (
+            <div className="mb-4 border rounded-lg p-4 bg-gray-50/50">
+              <div className="flex items-center justify-between mb-3">
+                <Label className="text-sm font-semibold">
+                  Categorías Predefinidas ({availableCategories.length})
+                </Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      const allAsRows = availableCategories.map((c) => ({
+                        name: c.label,
+                        minAge: c.minAge,
+                        maxAge: c.maxAge,
+                        gender: c.gender || "MIXTO",
+                        distanceKm: "",
+                        price: formData.price || "0",
+                      }));
+                      setCategories(allAsRows);
+                    }}
+                  >
+                    <Plus className="size-3 mr-1" /> Activar Todas
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setCategories([])}
+                  >
+                    <Trash2 className="size-3 mr-1" /> Limpiar
+                  </Button>
+                </div>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2 max-h-60 overflow-y-auto">
+                {availableCategories.map((cat) => {
+                  const isActive = categories.some(
+                    (c) => c.name === cat.label
+                  );
+                  return (
+                    <label
+                      key={cat.value}
+                      className={cn(
+                        "flex items-start gap-2 p-2 rounded-lg border cursor-pointer transition-colors text-xs",
+                        isActive
+                          ? "border-red-300 bg-red-50/50"
+                          : "border-gray-200 hover:bg-white"
+                      )}
+                    >
+                      <Checkbox
+                        checked={isActive}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setCategories((prev) => [
+                              ...prev,
+                              {
+                                name: cat.label,
+                                minAge: cat.minAge,
+                                maxAge: cat.maxAge,
+                                gender: cat.gender || "MIXTO",
+                                distanceKm: "",
+                                price: formData.price || "0",
+                              },
+                            ]);
+                          } else {
+                            setCategories((prev) =>
+                              prev.filter((c) => c.name !== cat.label)
+                            );
+                          }
+                        }}
+                      />
+                      <div className="flex-1">
+                        <div className="font-medium">{cat.label}</div>
+                        <div className="text-muted-foreground text-[10px]">
+                          {cat.gender === "M"
+                            ? "Masculino"
+                            : cat.gender === "F"
+                            ? "Femenino"
+                            : "Mixto"}
+                          {cat.profile && ` · ${cat.profile}`}
+                        </div>
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {/* Action buttons */}
           <div className="flex flex-wrap gap-3 mb-4">
             <Button
               type="button"
@@ -852,7 +1133,7 @@ export default function EventFormPage({
               onClick={() => handleGenerateCategories(5)}
             >
               <Sparkles className="size-4" />
-              Generar cada 5 años
+              Generar 5 años
             </Button>
             <Button
               type="button"
@@ -861,17 +1142,127 @@ export default function EventFormPage({
               onClick={() => handleGenerateCategories(10)}
             >
               <Sparkles className="size-4" />
-              Generar cada 10 años
+              Generar 10 años
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={handleAddSpecialCategory}
+              onClick={() => setShowSpecialCategoryForm(!showSpecialCategoryForm)}
             >
               <Plus className="size-4" />
               Agregar Categoría Especial
             </Button>
           </div>
+
+          {/* Special Category Form */}
+          {showSpecialCategoryForm && (
+            <div className="mb-4 border rounded-lg p-4 bg-purple-50/30 space-y-3">
+              <Label className="text-base font-semibold text-purple-700">
+                Nueva Categoría Especial
+              </Label>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="space-y-1">
+                  <Label className="text-xs">Nombre</Label>
+                  <Input
+                    value={newSpecialCat.name}
+                    onChange={(e) =>
+                      setNewSpecialCat({ ...newSpecialCat, name: e.target.value })
+                    }
+                    placeholder="Ej: Dupla Familiar"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Género</Label>
+                  <Select
+                    value={newSpecialCat.gender}
+                    onValueChange={(v) =>
+                      setNewSpecialCat({ ...newSpecialCat, gender: v })
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="M">Masculino</SelectItem>
+                      <SelectItem value="F">Femenino</SelectItem>
+                      <SelectItem value="MIXTO">Mixto</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Distancia (KM)</Label>
+                  <Input
+                    type="number"
+                    step="0.1"
+                    value={newSpecialCat.distanceKm}
+                    onChange={(e) =>
+                      setNewSpecialCat({ ...newSpecialCat, distanceKm: e.target.value })
+                    }
+                    placeholder="Ej: 10"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Edad Mínima</Label>
+                  <Input
+                    type="number"
+                    value={newSpecialCat.minAge}
+                    onChange={(e) =>
+                      setNewSpecialCat({ ...newSpecialCat, minAge: parseInt(e.target.value) || 0 })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Edad Máxima</Label>
+                  <Input
+                    type="number"
+                    value={newSpecialCat.maxAge}
+                    onChange={(e) =>
+                      setNewSpecialCat({ ...newSpecialCat, maxAge: parseInt(e.target.value) || 99 })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Precio (USD)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={newSpecialCat.price}
+                    onChange={(e) =>
+                      setNewSpecialCat({ ...newSpecialCat, price: e.target.value })
+                    }
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <Button
+                type="button"
+                size="sm"
+                className="gradient-primary text-white border-0"
+                onClick={() => {
+                  if (!newSpecialCat.name) {
+                    toast({ title: "El nombre es obligatorio", variant: "destructive" });
+                    return;
+                  }
+                  setCategories((prev) => [...prev, { ...newSpecialCat }]);
+                  setNewSpecialCat({
+                    name: "",
+                    gender: "MIXTO",
+                    minAge: 0,
+                    maxAge: 99,
+                    distanceKm: "",
+                    price: formData.price || "0",
+                  });
+                  setShowSpecialCategoryForm(false);
+                }}
+              >
+                <Plus className="size-3 mr-1" /> Agregar
+              </Button>
+            </div>
+          )}
 
           {/* Category Table */}
           {categories.length > 0 && (
@@ -965,7 +1356,7 @@ export default function EventFormPage({
               </div>
               <div className="border-t px-4 py-2 bg-muted/30">
                 <p className="text-xs text-muted-foreground">
-                  {categories.length} categorías definidas
+                  {categories.length} categorías activas
                 </p>
               </div>
             </div>
@@ -974,9 +1365,8 @@ export default function EventFormPage({
           {categories.length === 0 && (
             <div className="border rounded-lg p-8 text-center">
               <p className="text-muted-foreground text-sm">
-                No hay categorías definidas. Usa los botones de arriba para
-                generar categorías automáticamente o agregar categorías
-                especiales.
+                No hay categorías definidas. Selecciona una plantilla arriba o
+                usa los botones para generar categorías automáticamente.
               </p>
             </div>
           )}
@@ -1009,6 +1399,191 @@ export default function EventFormPage({
             : "Guardar Cambios"}
         </Button>
       </div>
+    </div>
+  );
+}
+
+// ============================================================
+// MultiImageUpload — Sube múltiples imágenes (JSON array de base64)
+// ============================================================
+function MultiImageUpload({
+  value,
+  onChange,
+  hint,
+}: {
+  value: string; // JSON array of base64 strings
+  onChange: (json: string) => void;
+  hint?: string;
+}) {
+  const images: string[] = (() => {
+    try {
+      return JSON.parse(value || "[]");
+    } catch {
+      return [];
+    }
+  })();
+
+  const addImage = (base64: string) => {
+    const next = [...images, base64];
+    onChange(JSON.stringify(next));
+  };
+
+  const removeImage = (idx: number) => {
+    const next = images.filter((_, i) => i !== idx);
+    onChange(JSON.stringify(next));
+  };
+
+  return (
+    <div className="space-y-3">
+      {images.length > 0 && (
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {images.map((img, idx) => (
+            <div key={idx} className="relative group">
+              <img
+                src={img}
+                alt={`Imagen ${idx + 1}`}
+                className="w-full h-32 object-cover rounded-lg border"
+              />
+              <button
+                type="button"
+                onClick={() => removeImage(idx)}
+                className="absolute top-1 right-1 bg-red-500 hover:bg-red-600 text-white rounded-full p-1 shadow-lg opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                <Trash2 className="size-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      <FileUpload
+        onChange={(base64) => base64 && addImage(base64)}
+        accept="image/*"
+        maxSize={5}
+        label="Agregar imagen"
+        hint={hint}
+        aspectRatio="auto"
+      />
+    </div>
+  );
+}
+
+// ============================================================
+// SponsorsLogosEditor — Editor de logos de patrocinadores
+// ============================================================
+interface SponsorLogo {
+  logo: string; // base64
+  name: string;
+  url: string;
+}
+
+function SponsorsLogosEditor({
+  value,
+  onChange,
+}: {
+  value: string; // JSON array of SponsorLogo
+  onChange: (json: string) => void;
+}) {
+  const sponsors: SponsorLogo[] = (() => {
+    try {
+      return JSON.parse(value || "[]");
+    } catch {
+      return [];
+    }
+  })();
+
+  const addSponsor = (logo: string) => {
+    const next = [...sponsors, { logo, name: "", url: "" }];
+    onChange(JSON.stringify(next));
+  };
+
+  const updateSponsor = (idx: number, field: keyof SponsorLogo, val: string) => {
+    const next = sponsors.map((s, i) => (i === idx ? { ...s, [field]: val } : s));
+    onChange(JSON.stringify(next));
+  };
+
+  const removeSponsor = (idx: number) => {
+    onChange(JSON.stringify(sponsors.filter((_, i) => i !== idx)));
+  };
+
+  return (
+    <div className="space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Dimensiones recomendadas: 200x200px o relación 1:1 (logo cuadrado)
+      </p>
+      {sponsors.length > 0 && (
+        <div className="space-y-3">
+          {sponsors.map((sponsor, idx) => (
+            <div
+              key={idx}
+              className="flex gap-3 items-start border rounded-lg p-3 bg-white"
+            >
+              <div className="w-20 h-20 shrink-0 rounded-lg border overflow-hidden bg-gray-50 flex items-center justify-center">
+                {sponsor.logo ? (
+                  <img
+                    src={sponsor.logo}
+                    alt={sponsor.name || "Logo"}
+                    className="w-full h-full object-contain"
+                  />
+                ) : (
+                  <ImageIcon className="size-6 text-gray-300" />
+                )}
+              </div>
+              <div className="flex-1 space-y-2">
+                <Input
+                  placeholder="Nombre del patrocinador"
+                  value={sponsor.name}
+                  onChange={(e) => updateSponsor(idx, "name", e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <Input
+                  placeholder="URL (opcional)"
+                  value={sponsor.url}
+                  onChange={(e) => updateSponsor(idx, "url", e.target.value)}
+                  className="h-8 text-sm"
+                />
+                <div className="flex gap-2">
+                  <label className="text-xs text-blue-600 hover:text-blue-800 cursor-pointer">
+                    Cambiar logo
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (!file) return;
+                        if (file.size > 2 * 1024 * 1024) {
+                          alert("La imagen no debe superar 2MB");
+                          return;
+                        }
+                        const reader = new FileReader();
+                        reader.onloadend = () => {
+                          updateSponsor(idx, "logo", reader.result as string);
+                        };
+                        reader.readAsDataURL(file);
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => removeSponsor(idx)}
+                    className="text-xs text-red-600 hover:text-red-800"
+                  >
+                    Eliminar
+                  </button>
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+      <FileUpload
+        onChange={(base64) => base64 && addSponsor(base64)}
+        accept="image/*"
+        maxSize={2}
+        label="Agregar logo de patrocinador"
+        hint="Logo cuadrado preferido (PNG transparente)"
+        aspectRatio="square"
+      />
     </div>
   );
 }

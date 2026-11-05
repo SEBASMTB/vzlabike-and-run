@@ -34,6 +34,8 @@ export default function EventEditPage({ eventData, categories }: EventEditPagePr
     hasShirtOption: String(eventData.hasShirtOption || "OPTIONAL"),
     shirtPrice: eventData.shirtPrice != null ? String(eventData.shirtPrice) : "",
     hasShirt: Boolean(eventData.hasShirt),
+    shirtImage: String(eventData.shirtImage || ""),
+    kitInfoDetails: String(eventData.kitInfoDetails || ""),
     price: String(eventData.price ?? 0),
     priceBs: String(eventData.priceBs ?? 0),
     maxParticipants: String(eventData.maxParticipants ?? 500),
@@ -44,9 +46,12 @@ export default function EventEditPage({ eventData, categories }: EventEditPagePr
     featured: Boolean(eventData.featured),
     organizer: String(eventData.organizer || ""),
     prizes: String(eventData.prizes || ""),
+    prizesImages: String(eventData.prizesImages || "[]"),
     rules: String(eventData.rules || ""),
+    rulesFile: String(eventData.rulesFile || ""),
     kitInfo: String(eventData.kitInfo || ""),
     sponsors: String(eventData.sponsors || ""),
+    sponsorsLogos: String(eventData.sponsorsLogos || "[]"),
   };
 
   const initialCategories = categories.map((cat) => ({
