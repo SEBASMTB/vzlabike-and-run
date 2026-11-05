@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-05  
+> Última actualización: 2026-11-05 (commit `9fa807c`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -123,10 +123,10 @@
 
 | # | Issue | Estado | Solución temporal |
 |---|-------|--------|-------------------|
-| 1 | El componente `SponsorsCarousel` no está integrado en la vista pública de detalle de evento (`EventDetailPage.tsx`) | **Pendiente** | Los logos se guardan en BD pero no se muestran en la web pública todavía |
-| 2 | Las imágenes de premios (`prizesImages`) no se renderizan en la vista pública | **Pendiente** | Datos guardados, falta integrar en EventDetailPage |
-| 3 | El archivo de reglamento (`rulesFile`) no tiene botón de descarga en la vista pública | **Pendiente** | Datos guardados, falta integrar |
-| 4 | `shirtImage` y `kitInfoDetails` no se muestran en la vista pública | **Pendiente** | Datos guardados, falta integrar en EventDetailPage |
+| 1 | ~~SponsorsCarousel no integrado en vista pública~~ | ✅ **Resuelto** (commit `9fa807c`) | Integrado en EventDetailPage |
+| 2 | ~~prizesImages no se renderizan en vista pública~~ | ✅ **Resuelto** (commit `9fa807c`) | Galería de imágenes integrada |
+| 3 | ~~rulesFile sin botón de descarga~~ | ✅ **Resuelto** (commit `9fa807c`) | Botón de descarga agregado |
+| 4 | ~~shirtImage y kitInfoDetails no se muestran~~ | ✅ **Resuelto** (commit `9fa807c`) | Sección de franela + kit integrada |
 | 5 | El sistema dual de categorías (`Category` Prisma vs `EventCategory` raw SQL) sigue sin reconciliar | **Pendiente** | El formulario usa `Category` Prisma (bulk endpoint). `CategoryManager` usa `EventCategory` raw SQL |
 | 6 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
 
@@ -135,6 +135,8 @@
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+9fa807c feat: Integrar nuevos campos en vista publica de detalle de evento
+189026d docs: Protocolo de estado y memoria del proyecto
 78bc31a fix: Remover campo 'category' del prisma.event.create() que causaba error
 6beefc5 feat: Script de migracion para Turso (columnas nuevas del Event)
 bf33f93 config: Activar Turso como base de datos de produccion
@@ -151,21 +153,19 @@ ba1e6f8 fix: Remover campo 'category' invalido del seed data
 
 ## 🚀 SIGUIENTE PASO INMEDIATO
 
-### Integrar los nuevos campos en la vista pública de detalle de evento
+### Reconciliar el sistema dual de categorías
 
-**Archivo a modificar:** `src/app/(main)/eventos/[slug]/EventDetailPage.tsx`
+**Problema:** Hay dos sistemas de categorías paralelos:
+1. `Category` (Prisma model) — usado por el formulario de eventos (bulk endpoint)
+2. `EventCategory` (raw SQL table) — usado por `CategoryManager.tsx`
 
 **Tareas:**
-1. Mostrar `shirtImage` en la sección de kit/franela
-2. Mostrar `kitInfoDetails` como contenido detallado del kit
-3. Renderizar `prizesImages` (JSON array de base64) como galería de imágenes
-4. Agregar botón de descarga para `rulesFile` (PDF o imagen del reglamento)
-5. Integrar `SponsorsCarousel` con `sponsorsLogos` (JSON array de {logo, name, url})
+1. Decidir qué sistema mantener (recomendado: `Category` Prisma por ser type-safe)
+2. Migrar `CategoryManager.tsx` para usar Prisma en lugar de raw SQL
+3. O eliminar `EventCategory` y unificar todo en `Category` con campos extra (`code`, `discipline`, `profileType`, `extraFields`, `active`, `sortOrder`)
+4. Actualizar `/api/admin/events/[id]/categories/route.ts` para usar Prisma
 
-**Notas:**
-- El `EventDetailPage.tsx` ya existe y tiene su propia estructura (997 líneas)
-- Los datos ya están en la BD (verificados con el evento demo)
-- Solo falta renderizarlos en el frontend
+**Alternativa más simple:** Dejar como está (funciona, pero con data fragmentada)
 
 ---
 
