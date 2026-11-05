@@ -60,3 +60,4 @@ corredores_vbr.csv
 .git-backup-old/
 *.log
 upload/
+*.bak
