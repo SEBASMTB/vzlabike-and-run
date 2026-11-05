@@ -1,0 +1,223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// FASE 1: Modelos para sistema de cronometraje deportivo
+// Estándar: World Athletics, UCI, World Triathlon
+// Compatible con ChuckScore / IPICO
+// ============================================================
+
+/// Corredor/Atleta — Registro único por cédula (identificación nacional)
+/// Un corredor puede tener múltiples inscripciones en diferentes eventos
+model Runner {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Identificación ---
+  cedula          String   @unique
+  nombres         String
+  apellidos       String
+  fechaNacimiento DateTime
+  genero          String   // 'M' o 'F'
+
+  // --- Contacto & Domicilio ---
+  email    String?
+  telefono String?
+  pais     String   @default("Venezuela")
+  estado   String?
+  ciudad   String?
+  direccion String?
+
+  // --- Datos Deportivos ---
+  team              String?
+  tallaFranela      String?
+  licenciaFederativa String?
+
+  // --- Ficha Médica Internacional ---
+  grupoSanguineo              String?
+  contactoEmergenciaNombre    String?
+  contactoEmergenciaTelefono  String?
+  contactoEmergenciaParentesco String?
+  alergiasCondiciones         String?
+
+  // --- Relaciones ---
+  registrations Registration[]
+}
+
+/// Evento Deportivo — Carrera, triatlón, ciclismo, etc.
+model Event {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // --- Identificación ---
+  title     String
+  slug      String   @unique
+  sportType String   @default("running") // running, cycling, triathlon, trail, virtual
+  date      DateTime
+  location  String
+
+  // --- Descripción y Media ---
+  description     String   @default("")
+  distance        String   @default("") // Distancia principal del evento (5K, 10K, 21K, 42K, etc.)
+  imageUrl        String   @default("")
+  bannerImage     String   @default("")
+  bannerHorizontalUrl String? // Banner horizontal para landing del evento
+  bannerVerticalUrl   String? // Banner vertical para móvil
+
+  // --- Configuración de Kit ---
+  hasShirtOption String  @default("OPTIONAL") // 'INCLUDED', 'OPTIONAL', 'NONE'
+  shirtPrice     Float?  // Precio adicional de la franela si es OPTIONAL
+  hasShirt       Boolean @default(true) // legacy compat
+
+  // --- Precios y Capacidad ---
+  price          Float   @default(0)
+  priceBs        Float   @default(0)
+  maxParticipants Int    @default(500)
+
+  // --- Requisitos ---
+  requiresFederationLicense Boolean @default(false)
+
+  // --- Configuración de Categorías ---
+  categories       String   @default("")         // legacy JSON compat (migrar a modelo Category)
+  ageCalcMode      String   @default("calendar_year")
+  categoryInterval String   @default("10")
+
+  // --- Estado y Metadata ---
+  status    String   @default("upcoming") // upcoming, active, finished, cancelled
+  featured  Boolean  @default(false)
+  organizer String   @default("")
+  prizes    String   @default("")
+  rules     String   @default("")
+  kitInfo   String   @default("")
+  sponsors  String   @default("")
+
+  // --- Relaciones ---
+  registrations Registration[]
+  categoryList  Category[]
+  products      Product[]
+}
+
+/// Categoría de Competencia — Normalizada con rangos de edad y género
+/// Estándar World Athletics: grupos por edad y género
+model Category {
+  id      String  @id @default(cuid())
+  eventId String
+  event   Event   @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  // --- Definición ---
+  name      String  // Ej: "Elite Masculino", "Master F 40-49", "Juvenil Mixto"
+  minAge    Int     // Edad mínima inclusive
+  maxAge    Int     // Edad máxima inclusive
+  gender    String  // 'M', 'F', 'MIXTO'
+  distanceKm Float? // Distancia en km (null si es misma para todos)
+
+  // --- Precio ---
+  price    Float   @default(0)  // Precio de inscripción para esta categoría
+
+  // --- Relaciones ---
+  registrations Registration[]
+
+  @@index([eventId])
+}
+
+/// Inscripción — Registro de un Runner en un Event bajo una Category
+model Registration {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  // --- Relaciones principales ---
+  eventId    String
+  event      Event    @relation(fields: [eventId], references: [id])
+  runnerId   String
+  runner     Runner   @relation(fields: [runnerId], references: [id])
+  categoryId String
+  category   Category @relation(fields: [categoryId], references: [id])
+
+  // --- Datos de Carrera ---
+  bibNumber                Int?
+  chipCode                 String?  // Código del chip RFID (IPICO/ChuckScore)
+  shirtSize                String?
+  hasShirt                 Boolean  @default(true)
+  federationLicenseNumber  String?  // Licencia federativa si requiresFederationLicense
+
+  // --- Pago & Estado ---
+  totalAmount     Float   @default(0)
+  paymentMethod   String  @default("")
+  paymentRef      String  @default("")
+  paymentProofUrl String? // URL del comprobante de pago (imagen)
+  status          String  @default("PENDING") // PENDING, APPROVED, REJECTED
+
+  // --- Legal ---
+  waiverAccepted Boolean @default(false) // Aceptación de responsabilidad
+
+  // --- Legacy fields (compatibilidad con formularios existentes) ---
+  firstName        String  @default("")
+  lastName         String  @default("")
+  email            String  @default("")
+  phone            String  @default("")
+  idNumber         String  @default("")
+  gender           String  @default("")
+  dateOfBirth      String  @default("")
+  team             String  @default("")
+  emergencyContact String  @default("")
+  emergencyPhone   String  @default("")
+
+  @@index([eventId])
+  @@index([runnerId])
+  @@index([categoryId])
+  @@index([status])
+}
+
+/// Producto de Tienda — Merchandising, accesorios, etc.
+model Product {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventId     String?
+  event       Event?   @relation(fields: [eventId], references: [id])
+  name        String
+  description String   @default("")
+  price       Float    @default(0)
+  priceBs     Float    @default(0)
+  imageUrl    String   @default("")
+  images      String   @default("[]")
+  sizes       String   @default("[]")
+  color       String   @default("")
+  stock       Int      @default(0)
+  active      Boolean  @default(true)
+  sortOrder   Int      @default(0)
+
+  orders ProductOrder[]
+}
+
+/// Pedido de Producto
+model ProductOrder {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+
+  productId     String
+  product       Product  @relation(fields: [productId], references: [id])
+  firstName     String
+  lastName      String
+  email         String
+  phone         String
+  idNumber      String   @default("")
+  size          String   @default("")
+  color         String   @default("")
+  quantity      Int      @default(1)
+  totalPrice    Float    @default(0)
+  totalPriceBs  Float    @default(0)
+  paymentMethod String   @default("")
+  paymentRef    String   @default("")
+  status        String   @default("pending")
+  notes         String   @default("")
+}

@@ -1,0 +1,127 @@
+import { db } from "@/lib/db";
+import { NextRequest, NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth";
+
+export async function GET(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authError = requireAuth(request);
+    if (authError) return authError;
+
+    const { id } = await params;
+
+    const event = await db.event.findUnique({
+      where: { id },
+      include: {
+        _count: {
+          select: { registrations: true },
+        },
+        categoryList: {
+          orderBy: [{ gender: 'asc' }, { minAge: 'asc' }],
+        },
+      },
+    });
+
+    if (!event) {
+      return NextResponse.json(
+        { error: "Evento no encontrado" },
+        { status: 404 }
+      );
+    }
+
+    return NextResponse.json({
+      ...event,
+      registrationCount: event._count.registrations,
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "Error al obtener evento" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function PUT(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authError = requireAuth(request);
+    if (authError) return authError;
+
+    const { id } = await params;
+    const body = await request.json();
+
+    const event = await db.event.update({
+      where: { id },
+      data: {
+        title: body.title,
+        slug: body.slug,
+        description: body.description,
+        date: body.date ? new Date(body.date) : undefined,
+        location: body.location,
+        distance: body.distance,
+        sportType: body.sportType,
+        imageUrl: body.imageUrl,
+        bannerImage: body.bannerImage,
+        bannerHorizontalUrl: body.bannerHorizontalUrl,
+        bannerVerticalUrl: body.bannerVerticalUrl,
+        hasShirtOption: body.hasShirtOption,
+        shirtPrice: body.shirtPrice,
+        price: body.price,
+        priceBs: body.priceBs,
+        status: body.status,
+        maxParticipants: body.maxParticipants,
+        featured: body.featured,
+        organizer: body.organizer,
+        prizes: body.prizes,
+        rules: body.rules,
+        kitInfo: body.kitInfo,
+        sponsors: body.sponsors,
+        categories: body.categories,
+        ageCalcMode: body.ageCalcMode,
+        categoryInterval: body.categoryInterval,
+        hasShirt: body.hasShirt,
+        requiresFederationLicense: body.requiresFederationLicense,
+      },
+    });
+
+    return NextResponse.json(event);
+  } catch {
+    return NextResponse.json(
+      { error: "Error al actualizar evento" },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authError = requireAuth(request);
+    if (authError) return authError;
+
+    const { id } = await params;
+
+    // Delete all registrations for this event first
+    await db.registration.deleteMany({
+      where: { eventId: id },
+    });
+
+    // Then delete the event
+    await db.event.delete({
+      where: { id },
+    });
+
+    return NextResponse.json({ success: true });
+  } catch {
+    return NextResponse.json(
+      { error: "Error al eliminar evento" },
+      { status: 500 }
+    );
+  }
+}
