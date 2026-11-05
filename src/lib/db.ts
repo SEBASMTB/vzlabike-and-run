@@ -530,6 +530,14 @@ function createPrismaClient(): PrismaClient {
 
   // 4. Production: use native Prisma SQLite with /tmp
   if (process.env.NODE_ENV === 'production') {
+    // ⚠️ WARNING: /tmp is ephemeral on Vercel serverless!
+    // Data WILL BE LOST on every cold start / redeploy.
+    // To persist data, set DATABASE_URL to a Turso libsql:// URL
+    // See: https://turso.tech → create database → copy URL
+    console.warn(
+      '⚠️ DATABASE: Using ephemeral /tmp/vzlabike.db — data will NOT persist across redeploys! ' +
+      'Set DATABASE_URL=libsql://... (Turso) in Vercel env vars for production persistence.'
+    );
     process.env.DATABASE_URL = 'file:/tmp/vzlabike.db';
   }
 
