@@ -12,7 +12,6 @@ import {
   Medal,
   Shirt,
   BookOpen,
-  ChevronLeft,
   ArrowRight,
   Tag,
   Star,
@@ -46,6 +45,9 @@ import { Separator } from "@/components/ui/separator";
 import { CountdownTimer } from "@/components/CountdownTimer";
 import { RegistrationDialog } from "@/components/RegistrationDialog";
 import { SponsorsCarousel } from "@/components/SponsorsCarousel";
+import { Header } from "@/components/Header";
+import { Footer } from "@/components/Footer";
+import { WhatsAppButton } from "@/components/WhatsAppButton";
 
 // ============================================================
 // Interfaces
@@ -321,21 +323,11 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-white">
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center">
-          <Link
-            href="/"
-            className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            <ChevronLeft className="size-4" />
-            Volver al Inicio
-          </Link>
-        </div>
-      </header>
+      {/* Header — mismo que la página principal */}
+      <Header />
 
       {/* Banner */}
-      <div className="relative pt-16">
+      <div className="relative pt-16 md:pt-20">
         {event.bannerImage || event.imageUrl ? (
           <div className="relative h-[280px] sm:h-[350px] md:h-[420px] w-full overflow-hidden">
             <img
@@ -1077,14 +1069,9 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
         </div>
       </main>
 
-      {/* Footer */}
-      <footer className="border-t py-8 bg-gray-50">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
-          <p className="text-sm text-muted-foreground">
-            © {new Date().getFullYear()} VzlaBike and Run® — Todos los derechos reservados
-          </p>
-        </div>
-      </footer>
+      {/* Footer — mismo que la página principal */}
+      <Footer />
+      <WhatsAppButton />
 
       {/* Registration Dialog */}
       <RegistrationDialog
