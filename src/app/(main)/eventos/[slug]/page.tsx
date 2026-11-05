@@ -14,9 +14,6 @@ export default async function EventPage({ params }: PageProps) {
   try {
     event = await db.event.findUnique({
       where: { slug },
-      include: {
-        _count: { select: { registrations: true } },
-      },
     });
   } catch {
     notFound();
@@ -37,7 +34,7 @@ export default async function EventPage({ params }: PageProps) {
     <EventDetailPage
       event={{
         ...event,
-        registrationCount: event._count.registrations,
+        registrationCount: 0,
       }}
       categories={categories}
     />
