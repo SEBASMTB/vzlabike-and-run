@@ -17,7 +17,6 @@ export default async function InscribirseRoute({ params }: PageProps) {
         categoryList: {
           orderBy: [{ minAge: "asc" }, { gender: "asc" }],
         },
-        _count: { select: { registrations: true } },
       },
     });
   } catch {
@@ -33,5 +32,5 @@ export default async function InscribirseRoute({ params }: PageProps) {
     notFound();
   }
 
-  return <InscribirsePage event={event} registrationCount={event._count.registrations} />;
+  return <InscribirsePage event={event} registrationCount={0} />;
 }

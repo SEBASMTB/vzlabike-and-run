@@ -7,13 +7,9 @@ export async function GET(
 ) {
   try {
     const { slug } = await params;
+    // Only fetch the event without registrations to avoid type mismatch errors
     const event = await db.event.findUnique({
       where: { slug },
-      include: {
-        registrations: {
-          orderBy: { createdAt: "desc" },
-        },
-      },
     });
 
     if (!event) {
