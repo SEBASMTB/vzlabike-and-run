@@ -153,9 +153,28 @@ model Registration {
   hasShirt                 Boolean  @default(true)
   federationLicenseNumber  String?  // Licencia federativa si requiresFederationLicense
 
+  // --- Tipo de Inscripción ---
+  registrationType  String  @default("self") // self | other
+  recipientName     String  @default("")  // Si es "other", nombre de quien recibe
+  recipientCedula   String  @default("")  // Cédula del receptor
+
+  // --- Datos Geográficos (snapshot al momento de inscripción) ---
+  estado           String  @default("")
+  ciudad           String  @default("")
+
+  // --- Contacto de Emergencia (snapshot) ---
+  emergName        String  @default("")
+  emergPhone       String  @default("")
+  emergRelation    String  @default("")  // Esposo/a, Familiar, Amigo, etc.
+
+  // --- Club / Team ---
+  club             String  @default("")
+
   // --- Pago & Estado ---
-  totalAmount     Float   @default(0)
-  paymentMethod   String  @default("")
+  totalAmount     Float   @default(0)    // Total en USD
+  totalAmountBs   Float   @default(0)    // Total en Bolívares
+  bcvRate         Float   @default(0)    // Tasa BCV al momento del pago
+  paymentMethod   String  @default("")   // transferencia | movíl | divisas | zelle
   paymentRef      String  @default("")
   paymentProofUrl String? // URL del comprobante de pago (imagen)
   status          String  @default("PENDING") // PENDING, APPROVED, REJECTED
