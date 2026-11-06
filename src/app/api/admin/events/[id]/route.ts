@@ -112,20 +112,31 @@ export async function DELETE(
 
     const { id } = await params;
 
-    // Delete all registrations for this event first
-    await db.registration.deleteMany({
-      where: { eventId: id },
-    });
+    // Use raw SQL to avoid Prisma type mismatch issues
+    // Delete registrations first (foreign key constraint)
+    await db.$executeRawUnsafe(
+      `DELETE FROM Registration WHERE eventId = ?`,
+      id
+    );
+
+    // Delete categories for this event
+    try {
+      await db.$executeRawUnsafe(
+        `DELETE FROM Category WHERE eventId = ?`,
+        id
+      );
+    } catch {}
 
     // Then delete the event
-    await db.event.delete({
-      where: { id },
-    });
+    await db.$executeRawUnsafe(
+      `DELETE FROM Event WHERE id = ?`,
+      id
+    );
 
     return NextResponse.json({ success: true });
-  } catch {
+  } catch (error) {
     return NextResponse.json(
-      { error: "Error al eliminar evento" },
+      { error: "Error al eliminar evento", detail: String(error).substring(0, 200) },
       { status: 500 }
     );
   }
