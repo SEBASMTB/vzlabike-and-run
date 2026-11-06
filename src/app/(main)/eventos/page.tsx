@@ -44,7 +44,8 @@ interface EventData {
   price: number;
   featured: boolean;
   maxParticipants: number;
-  _count: { registrations: number };
+  _count?: { registrations: number };
+  registrationCount?: number;
 }
 
 // ============================================================
@@ -182,7 +183,7 @@ function EventListCard({ event }: { event: EventData }) {
             <div>
               <span className="text-sm text-muted-foreground">Desde</span>
               <div className="text-2xl font-bold text-foreground">
-                ${event.price.toFixed(0)}
+                ${Number(event.price || 0).toFixed(0)}
                 <span className="text-sm font-normal text-muted-foreground ml-1">
                   USD
                 </span>
@@ -311,7 +312,7 @@ export default function EventosPage() {
                 <span className="text-sm">
                   <strong className="text-white">
                     {events
-                      .reduce((sum, e) => sum + e._count.registrations, 0)
+                      .reduce((sum, e) => sum + (e._count?.registrations || e.registrationCount || 0), 0)
                       .toLocaleString("es-VE")}
                   </strong>{" "}
                   inscripciones
