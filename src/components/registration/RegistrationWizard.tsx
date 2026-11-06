@@ -1011,7 +1011,9 @@ function renderStep1({
   handleRegistrationTypeChange,
 }: Step1Props) {
   const selfMode = formData.registrationType === "self";
-  const fieldsDisabled = selfMode && !isEditing;
+  // Only disable fields when there IS a runner profile and user hasn't clicked "Editar"
+  // If no runner profile, fields must be editable so user can fill manually
+  const fieldsDisabled = selfMode && !!runner && !isEditing;
 
   return (
     <div className="space-y-6">
