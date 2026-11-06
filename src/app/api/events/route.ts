@@ -89,7 +89,7 @@ export async function POST(request: NextRequest) {
         bannerHorizontalUrl: bannerHorizontalUrl || null,
         bannerVerticalUrl: bannerVerticalUrl || null,
         hasShirtOption: hasShirtOption || "OPTIONAL",
-        shirtPrice: shirtPrice ?? null,
+        shirtPrice: shirtPrice != null ? shirtPrice : 0,
         shirtImage: shirtImage || "",
         kitInfoDetails: kitInfoDetails || "",
         price: price || 0,
