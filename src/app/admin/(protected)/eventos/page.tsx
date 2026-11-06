@@ -215,6 +215,8 @@ export default function AdminEventosPage() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [editingEvent, setEditingEvent] = useState<Event | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Event | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkDeleting, setBulkDeleting] = useState(false);
   const [formData, setFormData] = useState<FormData>(emptyForm);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingBanner, setUploadingBanner] = useState(false);
@@ -284,6 +286,47 @@ export default function AdminEventosPage() {
   const handleDelete = (event: Event) => {
     setDeleteTarget(event);
     setDeleteOpen(true);
+  };
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) => {
+      if (prev.size === filteredEvents.length) return new Set();
+      return new Set(filteredEvents.map((e) => e.id));
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    if (selectedIds.size === 0) return;
+    if (!confirm(`¿Eliminar ${selectedIds.size} evento(s)? Esta acción no se puede deshacer.`)) return;
+
+    setBulkDeleting(true);
+    const cookie = document.cookie.includes("admin_token")
+      ? `admin_token=${document.cookie.split("admin_token=")[1].split(";")[0]}`
+      : "";
+
+    try {
+      await Promise.all(
+        Array.from(selectedIds).map((id) =>
+          fetch(`/api/admin/events/${id}`, {
+            method: "DELETE",
+            headers: { Cookie: cookie },
+          }).catch(() => {})
+        )
+      );
+      setSelectedIds(new Set());
+      await fetchEvents();
+    } finally {
+      setBulkDeleting(false);
+    }
   };
 
   const handleTitleChange = (title: string) => {
@@ -578,15 +621,30 @@ export default function AdminEventosPage() {
         </Link>
       </div>
 
-      {/* Search */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar eventos..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-9"
-        />
+      {/* Search + Bulk Actions */}
+      <div className="flex items-center gap-3 flex-wrap">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar eventos..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        {selectedIds.size > 0 && (
+          <Button
+            variant="destructive"
+            onClick={handleBulkDelete}
+            disabled={bulkDeleting}
+            className="shrink-0"
+          >
+            <Trash2 className="size-4" />
+            {bulkDeleting
+              ? "Eliminando..."
+              : `Eliminar (${selectedIds.size})`}
+          </Button>
+        )}
       </div>
 
       {/* Events Table */}
@@ -602,6 +660,13 @@ export default function AdminEventosPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={filteredEvents.length > 0 && selectedIds.size === filteredEvents.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="Seleccionar todos"
+                    />
+                  </TableHead>
                   <TableHead className="text-xs w-16">Img</TableHead>
                   <TableHead className="text-xs">Título</TableHead>
                   <TableHead className="text-xs hidden md:table-cell">Fecha</TableHead>
@@ -616,13 +681,20 @@ export default function AdminEventosPage() {
               <TableBody>
                 {filteredEvents.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={10} className="text-center py-12 text-muted-foreground">
                       {search ? "No se encontraron eventos" : "No hay eventos registrados"}
                     </TableCell>
                   </TableRow>
                 ) : (
                   filteredEvents.map((event) => (
-                    <TableRow key={event.id}>
+                    <TableRow key={event.id} className={selectedIds.has(event.id) ? "bg-red-50/50" : ""}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(event.id)}
+                          onCheckedChange={() => toggleSelect(event.id)}
+                          aria-label={`Seleccionar ${event.title}`}
+                        />
+                      </TableCell>
                       <TableCell>
                         {event.imageUrl ? (
                           <img src={event.imageUrl} alt={event.title} className="size-10 rounded-lg object-cover" />
