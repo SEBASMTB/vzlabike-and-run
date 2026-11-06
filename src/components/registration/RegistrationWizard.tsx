@@ -11,6 +11,7 @@ import {
   SelectContent,
   SelectItem,
   SelectLabel,
+  SelectGroup,
   SelectSeparator,
   SelectTrigger,
   SelectValue,
@@ -1434,41 +1435,49 @@ function renderStep3({
             <SelectValue placeholder="Selecciona tu club o team" />
           </SelectTrigger>
           <SelectContent className="max-h-72 overflow-y-auto">
-            <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
-              Opciones especiales
-            </SelectLabel>
-            {CLUB_OPCIONES_ESPECIALES.map((c) => (
-              <SelectItem key={c} value={c}>
-                {c}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
+                Opciones especiales
+              </SelectLabel>
+              {CLUB_OPCIONES_ESPECIALES.map((c) => (
+                <SelectItem key={c} value={c}>
+                  {c}
+                </SelectItem>
+              ))}
+            </SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
-              Ciclismo
-            </SelectLabel>
-            {CLUBES_VENEZUELA.filter((c) => c.tipo === "ciclismo").map((c) => (
-              <SelectItem key={c.nombre} value={c.nombre}>
-                {c.nombre}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
+                Ciclismo
+              </SelectLabel>
+              {CLUBES_VENEZUELA.filter((c) => c.tipo === "ciclismo").map((c) => (
+                <SelectItem key={c.nombre} value={c.nombre}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
-              Atletismo
-            </SelectLabel>
-            {CLUBES_VENEZUELA.filter((c) => c.tipo === "atletismo").map((c) => (
-              <SelectItem key={c.nombre} value={c.nombre}>
-                {c.nombre}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
+                Atletismo
+              </SelectLabel>
+              {CLUBES_VENEZUELA.filter((c) => c.tipo === "atletismo").map((c) => (
+                <SelectItem key={c.nombre} value={c.nombre}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectGroup>
             <SelectSeparator />
-            <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
-              Multi-deporte
-            </SelectLabel>
-            {CLUBES_VENEZUELA.filter((c) => c.tipo === "multi").map((c) => (
-              <SelectItem key={c.nombre} value={c.nombre}>
-                {c.nombre}
-              </SelectItem>
-            ))}
+            <SelectGroup>
+              <SelectLabel className="text-xs font-semibold uppercase text-gray-400">
+                Multi-deporte
+              </SelectLabel>
+              {CLUBES_VENEZUELA.filter((c) => c.tipo === "multi").map((c) => (
+                <SelectItem key={c.nombre} value={c.nombre}>
+                  {c.nombre}
+                </SelectItem>
+              ))}
+            </SelectGroup>
           </SelectContent>
         </Select>
         <FieldError message={errors.club} />
