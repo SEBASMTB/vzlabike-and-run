@@ -278,6 +278,19 @@ CREATE TABLE IF NOT EXISTS "Registration" (
     FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
 
+CREATE TABLE IF NOT EXISTS "Category" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "eventId" TEXT NOT NULL,
+    "name" TEXT NOT NULL,
+    "minAge" INTEGER NOT NULL DEFAULT 0,
+    "maxAge" INTEGER NOT NULL DEFAULT 99,
+    "gender" TEXT NOT NULL DEFAULT 'MIXTO',
+    "distanceKm" REAL,
+    "price" REAL NOT NULL DEFAULT 0,
+    FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE CASCADE ON UPDATE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "Category_eventId_idx" ON "Category"("eventId");
+
 CREATE TABLE IF NOT EXISTS "Product" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "eventId" TEXT,
