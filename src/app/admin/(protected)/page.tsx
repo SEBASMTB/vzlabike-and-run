@@ -40,7 +40,8 @@ interface RecentRegistration {
   status: string;
   bibNumber: number | null;
   createdAt: string;
-  event: { title: string };
+  eventTitle?: string;
+  event?: { title: string };
 }
 
 interface EventWithCount {
@@ -241,7 +242,7 @@ export default function AdminDashboardPage() {
                             {reg.firstName} {reg.lastName}
                           </TableCell>
                           <TableCell className="text-sm text-muted-foreground max-w-[120px] truncate">
-                            {reg.event.title}
+                            {reg.event?.title || reg.eventTitle || "—"}
                           </TableCell>
                           <TableCell>
                             <Badge
