@@ -54,49 +54,92 @@ export async function PUT(
     const { id } = await params;
     const body = await request.json();
 
-    const event = await db.event.update({
-      where: { id },
-      data: {
-        title: body.title,
-        slug: body.slug,
-        description: body.description,
-        date: body.date ? new Date(body.date) : undefined,
-        location: body.location,
-        distance: body.distance,
-        sportType: body.sportType,
-        imageUrl: body.imageUrl,
-        bannerImage: body.bannerImage,
-        bannerHorizontalUrl: body.bannerHorizontalUrl,
-        bannerVerticalUrl: body.bannerVerticalUrl,
-        hasShirtOption: body.hasShirtOption,
-        shirtPrice: body.shirtPrice,
-        shirtImage: body.shirtImage,
-        kitInfoDetails: body.kitInfoDetails,
-        price: body.price,
-        priceBs: body.priceBs,
-        status: body.status,
-        maxParticipants: body.maxParticipants,
-        featured: body.featured,
-        organizer: body.organizer,
-        prizes: body.prizes,
-        prizesImages: body.prizesImages,
-        rules: body.rules,
-        rulesFile: body.rulesFile,
-        kitInfo: body.kitInfo,
-        sponsors: body.sponsors,
-        sponsorsLogos: body.sponsorsLogos,
-        categories: body.categories,
-        ageCalcMode: body.ageCalcMode,
-        categoryInterval: body.categoryInterval,
-        hasShirt: body.hasShirt,
-        requiresFederationLicense: body.requiresFederationLicense,
-      },
-    });
+    // Use raw SQL to avoid Prisma type mismatch issues
+    // Build SET clause dynamically
+    const fields: string[] = [];
+    const values: any[] = [];
 
-    return NextResponse.json(event);
-  } catch {
+    const fieldMap: Record<string, string> = {
+      title: "title",
+      slug: "slug",
+      description: "description",
+      location: "location",
+      distance: "distance",
+      sportType: "sportType",
+      imageUrl: "imageUrl",
+      bannerImage: "bannerImage",
+      bannerHorizontalUrl: "bannerHorizontalUrl",
+      bannerVerticalUrl: "bannerVerticalUrl",
+      hasShirtOption: "hasShirtOption",
+      shirtImage: "shirtImage",
+      kitInfoDetails: "kitInfoDetails",
+      price: "price",
+      priceBs: "priceBs",
+      status: "status",
+      maxParticipants: "maxParticipants",
+      featured: "featured",
+      organizer: "organizer",
+      prizes: "prizes",
+      prizesImages: "prizesImages",
+      rules: "rules",
+      rulesFile: "rulesFile",
+      kitInfo: "kitInfo",
+      sponsors: "sponsors",
+      sponsorsLogos: "sponsorsLogos",
+      categories: "categories",
+      ageCalcMode: "ageCalcMode",
+      categoryInterval: "categoryInterval",
+      hasShirt: "hasShirt",
+      requiresFederationLicense: "requiresFederationLicense",
+    };
+
+    for (const [key, col] of Object.entries(fieldMap)) {
+      if (body[key] !== undefined) {
+        fields.push(`"${col}" = ?`);
+        let val = body[key];
+        // Convert booleans to 0/1 for SQLite
+        if (typeof val === "boolean") val = val ? 1 : 0;
+        // Convert numbers to ensure they're not BigInt
+        if (typeof val === "number") val = Number(val);
+        values.push(val);
+      }
+    }
+
+    // Handle date separately
+    if (body.date) {
+      fields.push(`"date" = ?`);
+      values.push(new Date(body.date).toISOString());
+    }
+
+    // Handle shirtPrice (ensure not null)
+    if (body.shirtPrice !== undefined) {
+      fields.push(`"shirtPrice" = ?`);
+      values.push(body.shirtPrice != null ? Number(body.shirtPrice) : 0);
+    }
+
+    // Add updatedAt
+    fields.push(`"updatedAt" = ?`);
+    values.push(new Date().toISOString());
+
+    if (fields.length > 0) {
+      values.push(id); // for WHERE clause
+      await db.$executeRawUnsafe(
+        `UPDATE Event SET ${fields.join(", ")} WHERE id = ?`,
+        ...values
+      );
+    }
+
+    // Return the updated event
+    const updated = await db.$queryRawUnsafe(
+      `SELECT * FROM Event WHERE id = ?`,
+      id
+    );
+
+    const result = Array.isArray(updated) && updated.length > 0 ? updated[0] : { id, success: true };
+    return NextResponse.json(result);
+  } catch (error) {
     return NextResponse.json(
-      { error: "Error al actualizar evento" },
+      { error: "Error al actualizar evento", detail: String(error).substring(0, 300) },
       { status: 500 }
     );
   }
