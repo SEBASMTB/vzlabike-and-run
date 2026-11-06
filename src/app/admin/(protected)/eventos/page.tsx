@@ -724,7 +724,7 @@ export default function AdminEventosPage() {
                         </Badge>
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-sm font-medium">
-                        ${event.price.toFixed(0)}
+                        ${Number(event.price || 0).toFixed(0)}
                       </TableCell>
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1 text-sm">
