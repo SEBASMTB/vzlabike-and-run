@@ -13,71 +13,61 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
+    const offset = (page - 1) * limit;
 
-    // Build raw SQL query to avoid Prisma type mismatch with Registration
-    let whereClause = "WHERE 1=1";
-    const params: any[] = [];
+    // Build SQL query string directly (no parameterized queries to avoid adapter issues)
+    let whereParts: string[] = ["1=1"];
 
     if (eventId) {
-      whereClause += ` AND r.eventId = ?`;
-      params.push(eventId);
+      whereParts.push(`r.eventId = '${eventId.replace(/'/g, "''")}'`);
     }
 
     if (status && status !== "todos" && status !== "all") {
-      whereClause += ` AND LOWER(r.status) = LOWER(?)`;
-      params.push(status);
+      whereParts.push(`LOWER(r.status) = LOWER('${status.replace(/'/g, "''")}')`);
     }
 
     if (search) {
-      const searchTerm = `%${search.trim()}%`;
-      whereClause += ` AND (
-        r.firstName LIKE ? OR
-        r.lastName LIKE ? OR
-        r.idNumber LIKE ? OR
-        r.email LIKE ? OR
-        r.bibNumber IS NOT NULL AND CAST(r.bibNumber AS TEXT) LIKE ?
-      )`;
-      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+      const term = search.trim().replace(/'/g, "''");
+      whereParts.push(`(r.firstName LIKE '%${term}%' OR r.lastName LIKE '%${term}%' OR r.idNumber LIKE '%${term}%' OR r.email LIKE '%${term}%')`);
     }
 
-    const offset = (page - 1) * limit;
+    const whereClause = whereParts.join(" AND ");
 
-    // Get registrations with event info via raw SQL
+    // Get registrations
     const registrations = await db.$queryRawUnsafe(
-      `SELECT r.*,
-              e.title as eventTitle, e.date as eventDate, e.sportType as eventSportType,
+      `SELECT r.id, r.firstName, r.lastName, r.email, r.phone, r.idNumber,
+              r.gender, r.dateOfBirth, r.shirtSize, r.status, r.createdAt,
+              r.paymentMethod, r.paymentRef, r.totalAmount, r.bibNumber,
+              r.eventId, r.categoryId,
+              e.title as eventTitle, e.date as eventDate,
               c.name as categoryName
        FROM Registration r
        LEFT JOIN Event e ON r.eventId = e.id
        LEFT JOIN Category c ON r.categoryId = c.id
-       ${whereClause}
+       WHERE ${whereClause}
        ORDER BY r.createdAt DESC
-       LIMIT ? OFFSET ?`,
-      ...params,
-      limit,
-      offset
+       LIMIT ${limit} OFFSET ${offset}`
     );
 
     // Get total count
     const countResult = await db.$queryRawUnsafe(
-      `SELECT COUNT(*) as count FROM Registration r ${whereClause}`,
-      ...params
+      `SELECT COUNT(*) as count FROM Registration r WHERE ${whereClause}`
     ) as any[];
 
-    const total = countResult[0]?.count || 0;
+    const total = Number(countResult[0]?.count || 0);
 
     return NextResponse.json({
       registrations,
       pagination: {
         page,
         limit,
-        total: Number(total),
-        totalPages: Math.ceil(Number(total) / limit),
+        total,
+        totalPages: Math.ceil(total / limit),
       },
     });
   } catch (error) {
     return NextResponse.json(
-      { error: "Error al obtener inscripciones", detail: String(error).substring(0, 200) },
+      { error: "Error al obtener inscripciones", detail: String(error).substring(0, 300) },
       { status: 500 }
     );
   }
