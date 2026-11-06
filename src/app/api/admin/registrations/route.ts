@@ -11,88 +11,73 @@ export async function GET(request: NextRequest) {
     const eventId = searchParams.get("eventId");
     const status = searchParams.get("status");
     const search = searchParams.get("search");
-    const categoryId = searchParams.get("categoryId");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
 
-    const where: Record<string, unknown> = {};
+    // Build raw SQL query to avoid Prisma type mismatch with Registration
+    let whereClause = "WHERE 1=1";
+    const params: any[] = [];
 
-    if (eventId) where.eventId = eventId;
-    if (categoryId) where.categoryId = categoryId;
-    if (status && status !== "todos" && status !== "all") where.status = status;
-
-    if (search) {
-      const searchTerm = search.trim();
-      // Try parsing as bibNumber if it's numeric
-      const bibNum = parseInt(searchTerm);
-      const isNumeric = !isNaN(bibNum);
-
-      where.OR = [
-        { bibNumber: isNumeric ? bibNum : -1 },
-        { runner: { cedula: { contains: searchTerm } } },
-        { runner: { nombres: { contains: searchTerm } } },
-        { runner: { apellidos: { contains: searchTerm } } },
-        // Legacy fallback fields
-        { firstName: { contains: searchTerm } },
-        { lastName: { contains: searchTerm } },
-        { idNumber: { contains: searchTerm } },
-      ];
+    if (eventId) {
+      whereClause += ` AND r.eventId = ?`;
+      params.push(eventId);
     }
 
-    const [registrations, total] = await Promise.all([
-      db.registration.findMany({
-        where,
-        orderBy: { createdAt: "desc" },
-        skip: (page - 1) * limit,
-        take: limit,
-        include: {
-          event: {
-            select: { id: true, title: true, date: true },
-          },
-          runner: {
-            select: {
-              id: true,
-              cedula: true,
-              nombres: true,
-              apellidos: true,
-              fechaNacimiento: true,
-              genero: true,
-              email: true,
-              telefono: true,
-              pais: true,
-              estado: true,
-              ciudad: true,
-              team: true,
-              tallaFranela: true,
-              licenciaFederativa: true,
-              grupoSanguineo: true,
-              contactoEmergenciaNombre: true,
-              contactoEmergenciaTelefono: true,
-              contactoEmergenciaParentesco: true,
-              alergiasCondiciones: true,
-            },
-          },
-          category: {
-            select: { id: true, name: true },
-          },
-        },
-      }),
-      db.registration.count({ where }),
-    ]);
+    if (status && status !== "todos" && status !== "all") {
+      whereClause += ` AND LOWER(r.status) = LOWER(?)`;
+      params.push(status);
+    }
+
+    if (search) {
+      const searchTerm = `%${search.trim()}%`;
+      whereClause += ` AND (
+        r.firstName LIKE ? OR
+        r.lastName LIKE ? OR
+        r.idNumber LIKE ? OR
+        r.email LIKE ? OR
+        r.bibNumber IS NOT NULL AND CAST(r.bibNumber AS TEXT) LIKE ?
+      )`;
+      params.push(searchTerm, searchTerm, searchTerm, searchTerm, searchTerm);
+    }
+
+    const offset = (page - 1) * limit;
+
+    // Get registrations with event info via raw SQL
+    const registrations = await db.$queryRawUnsafe(
+      `SELECT r.*,
+              e.title as eventTitle, e.date as eventDate, e.sportType as eventSportType,
+              c.name as categoryName
+       FROM Registration r
+       LEFT JOIN Event e ON r.eventId = e.id
+       LEFT JOIN Category c ON r.categoryId = c.id
+       ${whereClause}
+       ORDER BY r.createdAt DESC
+       LIMIT ? OFFSET ?`,
+      ...params,
+      limit,
+      offset
+    );
+
+    // Get total count
+    const countResult = await db.$queryRawUnsafe(
+      `SELECT COUNT(*) as count FROM Registration r ${whereClause}`,
+      ...params
+    ) as any[];
+
+    const total = countResult[0]?.count || 0;
 
     return NextResponse.json({
       registrations,
       pagination: {
         page,
         limit,
-        total,
-        totalPages: Math.ceil(total / limit),
+        total: Number(total),
+        totalPages: Math.ceil(Number(total) / limit),
       },
     });
   } catch (error) {
-    console.error("[API] Error fetching registrations:", error);
     return NextResponse.json(
-      { error: "Error al obtener inscripciones" },
+      { error: "Error al obtener inscripciones", detail: String(error).substring(0, 200) },
       { status: 500 }
     );
   }
