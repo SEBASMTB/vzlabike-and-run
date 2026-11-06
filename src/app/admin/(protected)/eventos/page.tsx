@@ -729,7 +729,7 @@ export default function AdminEventosPage() {
                       <TableCell className="hidden lg:table-cell">
                         <div className="flex items-center gap-1 text-sm">
                           <Users className="size-3.5 text-muted-foreground" />
-                          {event._count?.registrations || 0}
+                          {event.registrationCount || 0}
                         </div>
                       </TableCell>
                       <TableCell>
