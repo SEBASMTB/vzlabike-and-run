@@ -72,7 +72,7 @@ export function Footer() {
             </div>
             <p className="text-white/60 text-sm leading-relaxed mb-4">
               Empresa líder en cronometraje deportivo y organización de eventos
-              en Venezuela. Más de 10 años de experiencia garantizando
+              en Venezuela. Más de 25 años de experiencia garantizando
               resultados de primer nivel.
             </p>
             <div className="flex gap-3">
