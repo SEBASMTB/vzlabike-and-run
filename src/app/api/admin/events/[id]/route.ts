@@ -52,6 +52,7 @@ export async function PUT(
     if (authError) return authError;
 
     const { id } = await params;
+    const safeId = id.replace(/'/g, "''");
     const body = await request.json();
 
     // Use raw SQL to avoid Prisma type mismatch issues
@@ -122,17 +123,18 @@ export async function PUT(
     values.push(new Date().toISOString());
 
     if (fields.length > 0) {
-      values.push(id); // for WHERE clause
+      // Use string interpolation (libSQL adapter doesn't support params)
+      const setClause = fields
+        .map((f, i) => `${f.replace("?", `'${String(values[i]).replace(/'/g, "''")}'`)}`)
+        .join(", ");
       await db.$executeRawUnsafe(
-        `UPDATE Event SET ${fields.join(", ")} WHERE id = ?`,
-        ...values
+        `UPDATE Event SET ${setClause} WHERE id = '${safeId}'`
       );
     }
 
     // Return the updated event
     const updated = await db.$queryRawUnsafe(
-      `SELECT * FROM Event WHERE id = ?`,
-      id
+      `SELECT * FROM Event WHERE id = '${safeId}'`
     );
 
     const result = Array.isArray(updated) && updated.length > 0 ? updated[0] : { id, success: true };
@@ -154,27 +156,34 @@ export async function DELETE(
     if (authError) return authError;
 
     const { id } = await params;
+    const safeId = id.replace(/'/g, "''");
 
-    // Use raw SQL to avoid Prisma type mismatch issues
-    // Delete registrations first (foreign key constraint)
+    // Use raw SQL with string interpolation (libSQL adapter doesn't support params)
     await db.$executeRawUnsafe(
-      `DELETE FROM Registration WHERE eventId = ?`,
-      id
+      `DELETE FROM Registration WHERE eventId = '${safeId}'`
     );
 
-    // Delete categories for this event
     try {
       await db.$executeRawUnsafe(
-        `DELETE FROM Category WHERE eventId = ?`,
-        id
+        `DELETE FROM Category WHERE eventId = '${safeId}'`
       );
     } catch {}
 
-    // Then delete the event
     await db.$executeRawUnsafe(
-      `DELETE FROM Event WHERE id = ?`,
-      id
+      `DELETE FROM Event WHERE id = '${safeId}'`
     );
+
+    // Verify deletion
+    const remaining = await db.$queryRawUnsafe(
+      `SELECT COUNT(*) as count FROM Event WHERE id = '${safeId}'`
+    ) as any[];
+
+    if (Number(remaining[0]?.count || 0) > 0) {
+      return NextResponse.json(
+        { error: "No se pudo eliminar el evento" },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {
