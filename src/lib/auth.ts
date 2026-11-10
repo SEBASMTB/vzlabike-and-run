@@ -92,20 +92,14 @@ export function getAuthPayload(request: NextRequest): TokenPayload | null {
  * Middleware helper: check if the request is authenticated.
  * Returns an error response if not, or null if authenticated.
  *
- * SECURITY_MODE:
- * - "strict" (DEFAULT): blocks unauthenticated requests
- * - "permissive": logs warning but allows request (explicit opt-in only)
+ * STRICT ALWAYS: unauthenticated requests are rejected with 401.
+ * (The old env-var bypass was removed after it was found open in production.)
  */
 export function requireAuth(
   request: NextRequest
 ): NextResponse | null {
   const payload = getAuthPayload(request);
   if (!payload) {
-    // Strict by default: only allow unauthenticated requests if explicitly opted in
-    if (process.env.ADMIN_SECURITY_MODE === "permissive") {
-      console.warn("[AUTH] Permissive mode: allowing unauthenticated request:", request.method, request.nextUrl.pathname);
-      return null;
-    }
     return NextResponse.json({ error: "No autenticado" }, { status: 401 });
   }
   return null;

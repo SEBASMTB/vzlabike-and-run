@@ -36,7 +36,7 @@ export async function GET() {
       status,
       timestamp: new Date().toISOString(),
       uptime: process.uptime(),
-      version: "2.0.0",
+      version: "2.1.0",
       checks: {
         database: {
           status: dbOk ? "ok" : "error",
