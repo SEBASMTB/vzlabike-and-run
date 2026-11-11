@@ -157,6 +157,7 @@
 
 ```
 98be1de fix(build): eliminar 7 paginas duplicadas que rompian el build de Vercel
+1d7816c fix(admin): lista de eventos ya no muestra datos viejos tras borrar/editar (cache events-cache.ts + ?fresh=1)
 4f7db6c fix(security): auth estricto incondicional + marcador version 2.1.0 en /api/health
 8174298 fix(security): requireAuth estricto por defecto - bloquea PUT/DELETE sin token
 7b84ce7 (auto) cambio de permisos de archivos (644->755), sin contenido
@@ -175,6 +176,8 @@ bf33f93 config: Activar Turso como base de datos de produccion
 
 ### 1. Re-subir la imagen del evento MISS desde el panel (perdida en el incidente del 2026-11-10)
 
+### 1b. Verificar con el usuario si restaurar CAMPAÑA ADMIRABLE y LA CULATA (borradas durante pruebas del usuario)
+
 ### 2. (Opcional) Reconciliar el sistema dual de categorías
 1. `Category` (Prisma, usado por el formulario bulk) vs `EventCategory` (raw SQL, usado por `CategoryManager.tsx`)
 2. Recomendado: unificar en `Category` Prisma y actualizar `/api/admin/events/[id]/categories/route.ts`
@@ -183,6 +186,7 @@ bf33f93 config: Activar Turso como base de datos de produccion
 - Build de Vercel reparado (`98be1de`): producción en `version: 2.1.0`
 - APIs admin exigen auth (401 sin cookie, 200 con cookie), páginas admin con guard server-side
 - Evento MISS restaurado completo (id `cmwawt4yw0000jq08jrzyyfwk`)
+- Bug de borrado "a la segunda" resuelto (`1d7816c`): PUT/DELETE invalidan el caché y el admin pide `?fresh=1`; probado end-to-end en producción con evento desechable (crear → borrar → lista fresca inmediata sin refrescar)
 
 ---
 
