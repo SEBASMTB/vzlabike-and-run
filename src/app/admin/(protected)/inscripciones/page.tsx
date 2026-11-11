@@ -201,7 +201,7 @@ export default function AdminInscripcionesPage() {
 
   const fetchEvents = useCallback(async () => {
     try {
-      const res = await fetch("/api/events");
+      const res = await fetch("/api/events?fresh=1");
       if (res.ok) {
         const data = await res.json();
         setEvents(data);

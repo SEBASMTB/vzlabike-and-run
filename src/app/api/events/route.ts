@@ -1,19 +1,44 @@
 import { getDb } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import {
+  getEventsCache,
+  setEventsCache,
+  invalidateEventsCache,
+  isEventsCacheFresh,
+} from "@/lib/events-cache";
 
-// ── Simple in-memory cache for public GET /api/events ─────────────────────
-// Reduces Turso queries dramatically during traffic spikes.
-// Cache invalidates on any POST (admin creates event).
-let eventsCache: { data: string; timestamp: number } | null = null;
-const CACHE_TTL = 15_000; // 15 seconds
+export { invalidateEventsCache };
 
-export async function GET() {
+export async function GET(request: NextRequest) {
   try {
-    // Return cached response if still fresh
+    // ?fresh=1 → admin/internal consumers: bypass in-memory cache AND edge cache
+    const fresh = request.nextUrl.searchParams.get("fresh") === "1";
     const now = Date.now();
-    if (eventsCache && now - eventsCache.timestamp < CACHE_TTL) {
-      return new NextResponse(eventsCache.data, {
+
+    if (fresh) {
+      const db = await getDb();
+      const events = await db.$queryRawUnsafe(
+        `SELECT id, title, slug, sportType, date, location, distance,
+                description, price, priceBs, status, featured, hasShirt,
+                hasShirtOption, shirtPrice, categoryInterval, ageCalcMode,
+                organizer, maxParticipants, requiresFederationLicense,
+                createdAt, updatedAt
+         FROM Event
+         ORDER BY date ASC`
+      );
+      return new NextResponse(JSON.stringify(events), {
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, must-revalidate",
+          "X-Cache": "FRESH",
+        },
+      });
+    }
+
+    // Return cached response if still fresh
+    if (isEventsCacheFresh(now)) {
+      return new NextResponse(getEventsCache()!.data, {
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "public, s-maxage=15, stale-while-revalidate=30",
@@ -38,7 +63,7 @@ export async function GET() {
     const data = JSON.stringify(events);
 
     // Store in cache
-    eventsCache = { data, timestamp: now };
+    setEventsCache(data, now);
 
     return new NextResponse(data, {
       headers: {
@@ -119,7 +144,7 @@ export async function POST(request: NextRequest) {
     });
 
     // Invalidate cache when new event is created
-    eventsCache = null;
+    invalidateEventsCache();
 
     return NextResponse.json(event, { status: 201 });
   } catch (err) {

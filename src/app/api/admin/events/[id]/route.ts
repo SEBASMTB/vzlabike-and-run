@@ -1,6 +1,7 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { invalidateEventsCache } from "@/lib/events-cache";
 
 export async function GET(
   request: NextRequest,
@@ -130,6 +131,8 @@ export async function PUT(
       await db.$executeRawUnsafe(
         `UPDATE Event SET ${setClause} WHERE id = '${safeId}'`
       );
+      // Keep the public events list cache consistent after edits
+      invalidateEventsCache();
     }
 
     // Return the updated event
@@ -172,6 +175,9 @@ export async function DELETE(
     await db.$executeRawUnsafe(
       `DELETE FROM Event WHERE id = '${safeId}'`
     );
+
+    // Keep the public events list cache consistent after deletions
+    invalidateEventsCache();
 
     // Verify deletion
     const remaining = await db.$queryRawUnsafe(
