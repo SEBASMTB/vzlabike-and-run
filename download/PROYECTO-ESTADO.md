@@ -153,6 +153,32 @@
 
 ---
 
+## 🔍 REVISIÓN FLUJO INSCRIPCIONES/PAGOS (2026-11-10) — diagnóstico previo al rediseño
+
+**Hallazgo crítico verificado en producción: LA INSCRIPCIÓN PÚBLICA ESTÁ ROTA (HTTP 500).**
+`POST /api/events/[slug]/register` hace `db.registration.create({ category: "texto" })` sin `runnerId`/`categoryId` que el schema exige (schema.prisma:144-147) → PrismaClientValidationError → 500. Probado en producción: 500 confirmado. Producción tiene **0 inscripciones** (el flujo nunca funcionó; no hay datos que migrar).
+
+Otros hallazgos clave (revisión completa 2026-11-10):
+1. **Comprobante de pago nunca se guarda**: wizard envía base64 pero el route no lo lee; además body limit 10KB → todo comprobante real da 413. Campo `paymentProofUrl` existe en BD y en el admin (muerto en la práctica).
+2. **Montos y tasa BCV se descartan**: wizard envía `totalAmount/bcvRate/totalBs` pero no se persisten → admin ve monto "—", revenue usa precio del evento.
+3. **Categorías: 4 fuentes en conflicto**: `Category` (Prisma, usa el formulario admin) / `Event.categories` TEXT legacy (lee el detalle público) / `openCategories` (columna fantasma → 500 en `/api/events/[slug]/categories` → wizard recibe 0 categorías) / `EventCategory` (tabla que no existe en ninguna BD; usada por endpoints y CategoryManager muerto). Admin escribe categorías que el atleta NUNCA ve.
+4. **Estados inconsistentes**: "pending" minúscula (register) vs "PENDING" (schema) vs "confirmed" legacy (stats/dashboard) → badges sin color, filtros confusos.
+5. **Admin inscripciones**: filtro por categoría roto (UI lo envía, API lo ignora), búsqueda por dorsal no existe (placeholder lo promete), sin motivo de rechazo, sin email al aprobar/rechazar, dorsal se asigna al crear (debería ser al aprobar), export ChuckScore incluye PENDING, sin acciones masivas.
+6. **Código muerto**: `/api/register` (el único endpoint alineado al schema — irónico), `/api/eligibility`, `RegistrationDialog` + `GroupRegistrationDialog` (vivos en la home, llaman al endpoint roto, taxonomía de pago distinta), `CategoryManager`, `InscribirsePage.tsx`.
+7. **PII pública**: `/eventos/[slug]/inscritos` publica cédula+fecha de nacimiento; `/api/registrations/lookup` sin auth devuelve email/teléfono/DOB por cédula; `GET /api/registrations` vuelca todo incl. paymentRef.
+8. **Datos de destino de pago no se muestran**: los IDs/cuentas (Binance/Zelle/pago móvil) solo existen hardcodeados en el diálogo legacy → el atleta no sabe a dónde pagar.
+9. **BCV frágil**: API no oficial + fallback hardcode 145.50; tasa no se congela en la inscripción.
+10. Dorsal duplicable (count+1 sin transacción ni unique); grupo "en transacción" que no lo es (loop de creates).
+
+**PROPUESTA (presentada al usuario, esperando OK antes de implementar):**
+- Fase 1 — Rehacer flujo de inscripción sobre el modelo normalizado (Runner + Category FKs, snapshot legacy): 3 pasos (Datos → Categoría/Talla → Pago con datos de destino configurables por evento, monto+tasa guardados, comprobante comprimido client-side ≤3MB, referencia). Estado único PENDING/APPROVED/REJECTED.
+- Fase 2 — Panel admin ágil: vista pendientes por defecto, filtros funcionales (evento/categoría/búsqueda incl. dorsal), panel de pago en el detalle (comprobante visible), aprobar (dorsal auto) / rechazar (motivo obligatorio) con confirmación, email automático (Resend), acciones masivas, export solo aprobados.
+- Fase 3 — Categorías: única fuente = Category (Prisma); endpoint público lee Category; eliminar EventCategory/openCategories/dead code; inscripciones con categoryId + snapshot texto.
+- Fase 4 — Limpieza PII (inscritos/lookup sin datos sensibles), seguridad de cupo con unique constraints.
+- Staging: subdominio (CNAME → Vercel proyecto aparte) + BD Turso separada; guía entregada al usuario.
+
+---
+
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
