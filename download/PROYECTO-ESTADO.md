@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `11eeb78`)  
+> Última actualización: 2026-11-25 (commit `1b9a1e4`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -45,6 +45,7 @@
 - [x] `/eventos` — Listado público con filtros por deporte y buscador
   - [x] Hero con imagen profesional multi-disciplina (ciclismo de ruta, triatlón, calle, trekking) — commit `0bfe73a`
 - [x] `/eventos/[slug]` — Detalle de evento individual
+- [x] **Sección Monitor Live** (`/#monitor-live`) — nueva en la landing entre Servicios y Plataforma: foto real del monitor del evento (Santa Ana Corre 10K) en bisel de monitor con animación Ken Burns ligera (solo transform/GPU, 26s, desactivada con `prefers-reduced-motion`), badge EN VIVO con pulso, 4 beneficios y CTAs (resultados online + solicitar servicio) — commit `1b9a1e4`
 - [x] `/eventos/[slug]/inscribirse` — Página de inscripción
 - [x] `/tienda` — Tienda de productos
 - [x] `/resultados` — Redirige a resultados externos
@@ -76,6 +77,7 @@
 - [x] **Tipografía Figtree** (next/font/google, 300–900) — alternativa libre a "GP Commerce" de activenetwork.com; variable `--font-figtree` en `<html>` + regla base en globals.css. **Nota:** Inter nunca llegó a aplicarse (la variable estaba en `<body>` y Tailwind v4 aplica la fuente en `<html>`) — corregido en `faf9474`
 - [x] **Hero multi-disciplina `/eventos`** — imagen WebP 2560x1440 (ciclismo, triatlón, calle, trekking) + overlays de legibilidad (`0bfe73a`)
 - [x] **6 fotografías deportivas** — `public/features/{experiencia,creatividad,tecnologia,precision,adaptabilidad,compromiso}.webp` (896x512, 32–101 KB, colores naturales, sin texto/logos; masters en `scripts/foto-*.png`, generador `scripts/gen-features-foto.mjs`). **Sin chip de logo** (el usuario lo pidió quitar — el chip CSS de `6a24825` fue eliminado de `FeaturesSection.tsx`)
+- [x] `MonitorLiveSection` (nueva sección Monitor Live con foto real animada) — `src/components/MonitorLiveSection.tsx`
 - [x] `FileUpload` (dropzone reutilizable) — `src/components/ui/file-upload.tsx`
 - [x] `SponsorsCarousel` (carrusel animado de logos) — `src/components/SponsorsCarousel.tsx`
 - [x] `MultiImageUpload` (carga múltiple inline en EventFormPage)
@@ -190,6 +192,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+1b9a1e4 feat: nueva seccion Monitor Live - resultados en vivo en el sitio del evento (foto real + Ken Burns + badge EN VIVO)
 11eeb78 feat(diseno): fotos deportivas reales en Por Que Elegirnos, sin logos (reemplaza isometrico v2)
 6a24825 feat(diseno): ilustraciones estilo ChronoTrack v2 en Por Que Elegirnos - chip logo VBR via CSS overlay (anti-crop)
 b514f17 feat(diseno): ilustraciones isometricas estilo ChronoTrack con logo VBR en seccion Por Que Elegirnos

@@ -25,15 +25,16 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-Sección "¿Por Qué Elegirnos?" con fotografías deportivas reales v3 (commit `11eeb78`, deployado y verificado en producción):
-- 6 fotos realistas en `public/features/{experiencia,creatividad,tecnologia,precision,adaptabilidad,compromiso}.webp` (896x512, 32-101KB, colores naturales)
-- Escenas alineadas al texto: meta de maratón, salida con confeti, oficial + reloj LED + portátil, foto-finish con conos, triatleta saliendo del agua, voluntaria colocando medalla
-- **SIN logos** (el usuario pidió quitar el chip del logo en `11eeb78`)
-- Generador: `scripts/gen-features-foto.mjs` (SDK z-ai, 1344x768) → masters `scripts/foto-*.png`
-- Pendiente de feedback del usuario sobre esta versión v3
+Nueva sección **Monitor Live** en la landing (commit `1b9a1e4`, deployado y verificado en producción):
+- `src/components/MonitorLiveSection.tsx` — ubicada entre ServicesSection y PlatformSection (`/#monitor-live`)
+- Foto real del monitor del evento (Santa Ana Corre 10K) en `public/monitor-live.webp` (1280x694, 63KB)
+- Animación Ken Burns ligera vía CSS (`animate-kenburns-live` en globals.css, solo transform/GPU, 26s, con `prefers-reduced-motion`) + badge EN VIVO con pulso
+- Copy: resultados al instante en la pantalla del evento, sin apps ni esperas, máxima precisión
+- CTAs: "Ver resultados en línea" (vbr-results.vercel.app) y "Solicitar para mi evento" (/#contacto)
+- Pendiente de feedback del usuario
 
 == SIGUIENTE PASO ==
-1. Esperar feedback del usuario sobre las fotos v3 (si quiere cambiar una escena específica: editar su prompt en `scripts/gen-features-foto.mjs`, borrar ese master `scripts/foto-<nombre>.png` y correr `node scripts/gen-features-foto.mjs`)
+1. Esperar feedback del usuario sobre la sección Monitor Live (si envía una foto mejor resolución del monitor, reemplazar `public/monitor-live.webp` — ideal ≥1920x1080 sin recortes)
 2. Rediseño del flujo de inscripción/pagos (4 fases presentadas al usuario, esperando OK antes de implementar - ver PROPUESTA en PROYECTO-ESTADO.md)
 3. Unificación del sistema de categorías (Prisma Category vs raw SQL EventCategory)
 
