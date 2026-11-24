@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `b786f0d`)  
+> Última actualización: 2026-11-25 (commit `b514f17`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -41,7 +41,7 @@
 ### 🏠 Páginas públicas
 - [x] `/` — Landing page (Hero, Features, Events, Services, Contact)
   - [x] Tipografía **Figtree** global (estilo Active Network) — commit `faf9474`
-  - [x] Sección **¿Por Qué Elegirnos?** con imagen profesional por tarjeta + icono superpuesto — commit `b786f0d`
+  - [x] Sección **¿Por Qué Elegirnos?** con ilustraciones isométricas estilo ChronoTrack + logo VBR integrado — commit `b514f17` (antes fotos, reemplazadas a pedido del usuario)
 - [x] `/eventos` — Listado público con filtros por deporte y buscador
   - [x] Hero con imagen profesional multi-disciplina (ciclismo de ruta, triatlón, calle, trekking) — commit `0bfe73a`
 - [x] `/eventos/[slug]` — Detalle de evento individual
@@ -75,7 +75,7 @@
 ### 🎨 Componentes UI
 - [x] **Tipografía Figtree** (next/font/google, 300–900) — alternativa libre a "GP Commerce" de activenetwork.com; variable `--font-figtree` en `<html>` + regla base en globals.css. **Nota:** Inter nunca llegó a aplicarse (la variable estaba en `<body>` y Tailwind v4 aplica la fuente en `<html>`) — corregido en `faf9474`
 - [x] **Hero multi-disciplina `/eventos`** — imagen WebP 2560x1440 (ciclismo, triatlón, calle, trekking) + overlays de legibilidad (`0bfe73a`)
-- [x] **6 imágenes de características** — `public/features/*.webp` (896x512, 35–105 KB c/u; masters PNG en `scripts/feat-*.png`)
+- [x] **6 ilustraciones isométricas** — `public/features/iso-*.webp` (896x512, 25–49 KB, paleta navy #1A1A2E + rojo #DC2626 sobre blanco, logo VBR compuesto abajo-derecha vía `scripts/compose-logo.mjs`; masters en `scripts/iso-*.png`)
 - [x] `FileUpload` (dropzone reutilizable) — `src/components/ui/file-upload.tsx`
 - [x] `SponsorsCarousel` (carrusel animado de logos) — `src/components/SponsorsCarousel.tsx`
 - [x] `MultiImageUpload` (carga múltiple inline en EventFormPage)
@@ -190,6 +190,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+b514f17 feat(diseno): ilustraciones isometricas estilo ChronoTrack con logo VBR en seccion Por Que Elegirnos
 b786f0d feat(diseno): seccion Por Que Elegirnos con imagen por tarjeta (6 WebP optimizados alineados a cada texto)
 faf9474 feat(diseno): tipografia Figtree estilo Active Network (alternativa libre a GP Commerce) + fix variable next/font en html
 0bfe73a feat(diseno): hero multi-disciplina en /eventos (ciclismo, triatlon, calle, trekking) 2560x1440 WebP nitido
