@@ -7,36 +7,48 @@ import { SectionHeading } from "./SectionHeading";
 const features = [
   {
     icon: Trophy,
+    image: "/features/experiencia.webp",
+    alt: "Meta de maratón con cientos de corredores cruzando el arco de cronometraje",
     title: "Experiencia Organizativa",
     description:
       "Más de 10 años organizando eventos deportivos de primer nivel en Venezuela. Cada carrera es una experiencia perfecta.",
   },
   {
     icon: Lightbulb,
+    image: "/features/creatividad.webp",
+    alt: "Salida de carrera con polvos de colores vibrantes",
     title: "Creatividad",
     description:
       "Diseñamos experiencias únicas y memorables que destacan tu evento entre los demás. Innovación en cada detalle.",
   },
   {
     icon: Zap,
+    image: "/features/tecnologia.webp",
+    alt: "Sistema de cronometraje electrónico con reloj LED en la meta",
     title: "Innovación Tecnológica",
     description:
       "Utilizamos la tecnología más avanzada en cronometraje y gestión de eventos para garantizar precisión total.",
   },
   {
     icon: Target,
+    image: "/features/precision.webp",
+    alt: "Vista aérea de la línea de salida organizada con conos y señalización",
     title: "Organización al Milímetro",
     description:
       "Cada aspecto del evento está planificado con precisión milimétrica. Desde la salida hasta los resultados finales.",
   },
   {
     icon: Settings,
+    image: "/features/adaptabilidad.webp",
+    alt: "Montañista MTB, nadador en aguas abiertas y trail runner en montaña",
     title: "Adaptabilidad",
     description:
       "Nos adaptamos a cualquier tipo de evento y modalidad: carreras, triatlones, MTB, ciclismo, virtuales y más.",
   },
   {
     icon: Shield,
+    image: "/features/compromiso.webp",
+    alt: "Voluntaria colocando la medalla a un corredor en la meta",
     title: "Compromiso Total",
     description:
       "Nuestro compromiso es con la excelencia. Trabajamos incansablemente para superar las expectativas de cada cliente.",
@@ -78,17 +90,30 @@ export function FeaturesSection() {
             <motion.div
               key={feature.title}
               variants={itemVariants}
-              className="group relative bg-card rounded-2xl p-6 border shadow-sm hover:shadow-xl hover:border-red-200 transition-all duration-300"
+              className="group relative bg-card rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl hover:border-red-200 transition-all duration-300"
             >
-              <div className="w-14 h-14 gradient-primary rounded-xl flex items-center justify-center mb-4 group-hover:scale-110 transition-transform">
-                <feature.icon className="size-7 text-white" />
+              {/* Imagen relacionada con el texto */}
+              <div className="relative h-44 overflow-hidden">
+                <img
+                  src={feature.image}
+                  alt={feature.alt}
+                  loading="lazy"
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/45 via-transparent to-transparent" />
+                {/* Icono superpuesto entre imagen y contenido */}
+                <div className="absolute -bottom-6 left-6 w-14 h-14 gradient-primary rounded-xl flex items-center justify-center shadow-lg ring-4 ring-card group-hover:scale-110 transition-transform">
+                  <feature.icon className="size-7 text-white" />
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-foreground mb-2">
-                {feature.title}
-              </h3>
-              <p className="text-muted-foreground leading-relaxed">
-                {feature.description}
-              </p>
+              <div className="p-6 pt-9">
+                <h3 className="text-xl font-bold text-foreground mb-2">
+                  {feature.title}
+                </h3>
+                <p className="text-muted-foreground leading-relaxed">
+                  {feature.description}
+                </p>
+              </div>
             </motion.div>
           ))}
         </motion.div>
