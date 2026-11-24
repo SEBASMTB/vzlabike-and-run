@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-10 (commit `4f7db6c`)  
+> Última actualización: 2026-11-25 (commit `0bfe73a`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -41,6 +41,7 @@
 ### 🏠 Páginas públicas
 - [x] `/` — Landing page (Hero, Features, Events, Services, Contact)
 - [x] `/eventos` — Listado público con filtros por deporte y buscador
+  - [x] Hero con imagen profesional multi-disciplina (ciclismo de ruta, triatlón, calle, trekking) — commit `0bfe73a`
 - [x] `/eventos/[slug]` — Detalle de evento individual
 - [x] `/eventos/[slug]/inscribirse` — Página de inscripción
 - [x] `/tienda` — Tienda de productos
@@ -102,7 +103,9 @@
 ├── scripts/
 │   ├── migrate-turso.js          # Migración de columnas a Turso
 │   ├── create-demo-event.py      # Script para crear evento demo
-│   └── fix-demo-event.py         # Script para crear evento via API
+│   ├── fix-demo-event.py         # Script para crear evento via API
+│   ├── gen-hero.mjs              # Generador imagen héroe (SDK z-ai, tamaños custom múltiplos de 32)
+│   └── hero-a.png                # Imagen fuente multi-disciplina (master, 2560x1440)
 └── download/
     ├── INVENTARIO-PROYECTO.md    # Inventario completo (rutas, APIs, componentes)
     ├── TURSO-SETUP.md            # Guía de configuración Turso
@@ -182,6 +185,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+0bfe73a feat(diseno): hero multi-disciplina en /eventos (ciclismo, triatlon, calle, trekking) 2560x1440 WebP nitido
 98be1de fix(build): eliminar 7 paginas duplicadas que rompian el build de Vercel
 1d7816c fix(admin): lista de eventos ya no muestra datos viejos tras borrar/editar (cache events-cache.ts + ?fresh=1)
 4f7db6c fix(security): auth estricto incondicional + marcador version 2.1.0 en /api/health
@@ -199,6 +203,8 @@ bf33f93 config: Activar Turso como base de datos de produccion
 ---
 
 ## 🚀 SIGUIENTE PASO INMEDIATO
+
+### 0. Continuar con el rediseño del flujo de inscripciones/pagos (diagnóstico arriba, 4 fases — esperar OK del usuario)
 
 ### 1. Re-subir la imagen del evento MISS desde el panel (perdida en el incidente del 2026-11-10)
 
