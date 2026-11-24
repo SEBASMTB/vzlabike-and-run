@@ -4,6 +4,7 @@ import { HeroSection } from "@/components/HeroSection";
 import { FeaturesSection } from "@/components/FeaturesSection";
 import { EventsSection } from "@/components/EventsSection";
 import { ServicesSection } from "@/components/ServicesSection";
+import { MonitorLiveSection } from "@/components/MonitorLiveSection";
 import { PlatformSection } from "@/components/PlatformSection";
 import { ClientsSection } from "@/components/ClientsSection";
 import { ContactSection } from "@/components/ContactSection";
@@ -21,6 +22,7 @@ export default function Home() {
         <FeaturesSection />
         <EventsSection />
         <ServicesSection />
+        <MonitorLiveSection />
         <PlatformSection />
         <ClientsSection />
         <ContactSection />

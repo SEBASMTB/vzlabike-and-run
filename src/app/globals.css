@@ -152,3 +152,24 @@
     background-clip: text;
   }
 }
+
+/* Ken Burns sutil para el Monitor Live — solo transform (GPU), sin afectar layout.
+   Se desactiva para usuarios que prefieren movimiento reducido. */
+@keyframes kenburns-live {
+  0% {
+    transform: scale(1) translate(0, 0);
+  }
+  50% {
+    transform: scale(1.06) translate(-1.2%, -0.8%);
+  }
+  100% {
+    transform: scale(1) translate(0, 0);
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .animate-kenburns-live {
+    animation: kenburns-live 26s ease-in-out infinite;
+    will-change: transform;
+  }
+}
