@@ -25,13 +25,17 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-[DESCRIBIR AQUÍ LA TAREA ACTUAL]
+Sección "¿Por Qué Elegirnos?" con ilustraciones estilo ChronoTrack v2 (commit `6a24825`, deployado y verificado en producción):
+- 6 ilustraciones isométricas planas nuevas en `public/features/{experiencia,creatividad,tecnologia,precision,adaptabilidad,compromiso}.webp` (896x512, 23-38KB, navy #1A1A2E + rojo VBR #DC2626 sobre fondo blanco)
+- Escenas: arcos START/FINISH con tapetes rojos, celebración con globos, centro de cronometraje (servidores + reloj LED), recorrido aéreo con foto-finish, circuito de triatlón, podio de ganadores
+- El logo VBR va como **chip overlay CSS** en `FeaturesSection.tsx` (navy 90%, bottom-right) → nunca se recorta con object-cover en ningún viewport
+- Generador: `scripts/gen-features-vbr.mjs` (SDK z-ai, 1344x768) → masters `scripts/vbr-*.png`
+- Pendiente de feedback del usuario sobre esta versión v2
 
 == SIGUIENTE PASO ==
-Integrar los nuevos campos del formulario de eventos en la vista pública de detalle de evento:
-- Mostrar shirtImage, kitInfoDetails, prizesImages, rulesFile, sponsorsLogos
-- Archivo a modificar: src/app/(main)/eventos/[slug]/EventDetailPage.tsx
-- Integrar componente SponsorsCarousel
+1. Esperar feedback del usuario sobre las ilustraciones v2 (si no le gustan, regenerar escenas específicas con `node scripts/gen-features-vbr.mjs force` tras editar el prompt en el script)
+2. Rediseño del flujo de inscripción/pagos (4 fases presentadas al usuario, esperando OK antes de implementar - ver PROPUESTA en PROYECTO-ESTADO.md)
+3. Unificación del sistema de categorías (Prisma Category vs raw SQL EventCategory)
 
 == PROTOCOLO DE TRABAJO ==
 1. Cada cambio → commit atómico + git push origin main
