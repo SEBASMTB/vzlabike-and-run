@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `6a24825`)  
+> Última actualización: 2026-11-25 (commit `11eeb78`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -41,7 +41,7 @@
 ### 🏠 Páginas públicas
 - [x] `/` — Landing page (Hero, Features, Events, Services, Contact)
   - [x] Tipografía **Figtree** global (estilo Active Network) — commit `faf9474`
-  - [x] Sección **¿Por Qué Elegirnos?** con ilustraciones isométricas estilo ChronoTrack (regeneradas: arcos START/FINISH, centro de cronometraje, triatlón, podio) + chip logo VBR — commit `6a24825` (v1 en `b514f17`, mejorada a pedido del usuario)
+  - [x] Sección **¿Por Qué Elegirnos?** con **fotografías deportivas reales** (maratón, salida, cronometraje, foto-finish, triatlón, medalla) alineadas al texto de cada tarjeta, **sin logos** — commit `11eeb78` (v2 isométrico `6a24825` descartado por el usuario)
 - [x] `/eventos` — Listado público con filtros por deporte y buscador
   - [x] Hero con imagen profesional multi-disciplina (ciclismo de ruta, triatlón, calle, trekking) — commit `0bfe73a`
 - [x] `/eventos/[slug]` — Detalle de evento individual
@@ -75,7 +75,7 @@
 ### 🎨 Componentes UI
 - [x] **Tipografía Figtree** (next/font/google, 300–900) — alternativa libre a "GP Commerce" de activenetwork.com; variable `--font-figtree` en `<html>` + regla base en globals.css. **Nota:** Inter nunca llegó a aplicarse (la variable estaba en `<body>` y Tailwind v4 aplica la fuente en `<html>`) — corregido en `faf9474`
 - [x] **Hero multi-disciplina `/eventos`** — imagen WebP 2560x1440 (ciclismo, triatlón, calle, trekking) + overlays de legibilidad (`0bfe73a`)
-- [x] **6 ilustraciones isométricas v2** — `public/features/{experiencia,creatividad,tecnologia,precision,adaptabilidad,compromiso}.webp` (896x512, 23–38 KB, paleta navy #1A1A2E + rojo VBR #DC2626 sobre blanco, estilo ChronoTrack verificado contra su hero real; generadas con `scripts/gen-features-vbr.mjs` y masters en `scripts/vbr-*.png`). El logo VBR va como **chip overlay CSS** (`FeaturesSection.tsx`, navy 90% + logo h-5, bottom-right) → nunca se recorta con `object-cover` en ningún viewport (verificado 3-col desktop y 2-col tablet)
+- [x] **6 fotografías deportivas** — `public/features/{experiencia,creatividad,tecnologia,precision,adaptabilidad,compromiso}.webp` (896x512, 32–101 KB, colores naturales, sin texto/logos; masters en `scripts/foto-*.png`, generador `scripts/gen-features-foto.mjs`). **Sin chip de logo** (el usuario lo pidió quitar — el chip CSS de `6a24825` fue eliminado de `FeaturesSection.tsx`)
 - [x] `FileUpload` (dropzone reutilizable) — `src/components/ui/file-upload.tsx`
 - [x] `SponsorsCarousel` (carrusel animado de logos) — `src/components/SponsorsCarousel.tsx`
 - [x] `MultiImageUpload` (carga múltiple inline en EventFormPage)
@@ -190,6 +190,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+11eeb78 feat(diseno): fotos deportivas reales en Por Que Elegirnos, sin logos (reemplaza isometrico v2)
 6a24825 feat(diseno): ilustraciones estilo ChronoTrack v2 en Por Que Elegirnos - chip logo VBR via CSS overlay (anti-crop)
 b514f17 feat(diseno): ilustraciones isometricas estilo ChronoTrack con logo VBR en seccion Por Que Elegirnos
 b786f0d feat(diseno): seccion Por Que Elegirnos con imagen por tarjeta (6 WebP optimizados alineados a cada texto)
