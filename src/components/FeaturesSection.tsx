@@ -7,48 +7,48 @@ import { SectionHeading } from "./SectionHeading";
 const features = [
   {
     icon: Trophy,
-    image: "/features/iso-experiencia.webp",
-    alt: "Ilustración isométrica de arcos de salida y meta con corredores y cámara de cronometraje",
+    image: "/features/experiencia.webp",
+    alt: "Ilustración isométrica de arcos de salida y meta con tapetes de cronometraje, corredor y ciclista",
     title: "Experiencia Organizativa",
     description:
       "Más de 10 años organizando eventos deportivos de primer nivel en Venezuela. Cada carrera es una experiencia perfecta.",
   },
   {
     icon: Lightbulb,
-    image: "/features/iso-creatividad.webp",
-    alt: "Ilustración isométrica de escenario de evento con globos, banderines y multitud celebrando",
+    image: "/features/creatividad.webp",
+    alt: "Ilustración isométrica de escenario de celebración con globos rojos, banderines y multitud animando",
     title: "Creatividad",
     description:
       "Diseñamos experiencias únicas y memorables que destacan tu evento entre los demás. Innovación en cada detalle.",
   },
   {
     icon: Zap,
-    image: "/features/iso-tecnologia.webp",
-    alt: "Ilustración isométrica de centro de cronometraje con monitores, servidores y reloj digital",
+    image: "/features/tecnologia.webp",
+    alt: "Ilustración isométrica de centro de control de cronometraje con servidores, reloj LED y pantallas de resultados",
     title: "Innovación Tecnológica",
     description:
       "Utilizamos la tecnología más avanzada en cronometraje y gestión de eventos para garantizar precisión total.",
   },
   {
     icon: Target,
-    image: "/features/iso-precision.webp",
-    alt: "Ilustración isométrica aérea del recorrido con puestos, conos y vallas ordenadas",
+    image: "/features/precision.webp",
+    alt: "Ilustración isométrica aérea del recorrido ordenado con conos, vallas, tapetes rojos y cámara foto-finish",
     title: "Organización al Milímetro",
     description:
       "Cada aspecto del evento está planificado con precisión milimétrica. Desde la salida hasta los resultados finales.",
   },
   {
     icon: Settings,
-    image: "/features/iso-adaptabilidad.webp",
-    alt: "Ilustración isométrica del circuito de triatlón: natación, ciclismo y carrera conectados por flechas",
+    image: "/features/adaptabilidad.webp",
+    alt: "Ilustración isométrica del circuito de triatlón: natación, transición con bicicletas y carrera a pie",
     title: "Adaptabilidad",
     description:
       "Nos adaptamos a cualquier tipo de evento y modalidad: carreras, triatlones, MTB, ciclismo, virtuales y más.",
   },
   {
     icon: Shield,
-    image: "/features/iso-compromiso.webp",
-    alt: "Ilustración isométrica de podio con medallas, hidratación y puesto de primeros auxilios",
+    image: "/features/compromiso.webp",
+    alt: "Ilustración isométrica de podio de ganadores con medallas, hidratación y carpa de primeros auxilios",
     title: "Compromiso Total",
     description:
       "Nuestro compromiso es con la excelencia. Trabajamos incansablemente para superar las expectativas de cada cliente.",
@@ -92,7 +92,7 @@ export function FeaturesSection() {
               variants={itemVariants}
               className="group relative bg-card rounded-2xl overflow-hidden border shadow-sm hover:shadow-xl hover:border-red-200 transition-all duration-300"
             >
-              {/* Ilustración relacionada con el texto (estilo isométrico, marca VBR) */}
+              {/* Ilustración estilo chrono (isométrico plano, navy + rojo VBR) */}
               <div className="relative h-44 overflow-hidden">
                 <img
                   src={feature.image}
@@ -100,6 +100,15 @@ export function FeaturesSection() {
                   loading="lazy"
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
                 />
+                {/* Marca VBR integrada (overlay CSS: nunca se recorta con object-cover) */}
+                <div className="absolute bottom-3 right-3 z-10 flex items-center rounded-lg bg-[#1A1A2E]/90 px-3 py-1.5 shadow-sm ring-1 ring-white/10">
+                  <img
+                    src="/LOGOVBR.png"
+                    alt="VzlaBike & Run"
+                    loading="lazy"
+                    className="h-5 w-auto"
+                  />
+                </div>
                 {/* Icono superpuesto entre ilustración y contenido */}
                 <div className="absolute -bottom-6 left-6 w-14 h-14 gradient-primary rounded-xl flex items-center justify-center shadow-lg ring-4 ring-card group-hover:scale-110 transition-transform">
                   <feature.icon className="size-7 text-white" />
