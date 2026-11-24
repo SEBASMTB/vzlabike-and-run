@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `0bfe73a`)  
+> Última actualización: 2026-11-25 (commit `faf9474`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -40,6 +40,7 @@
 
 ### 🏠 Páginas públicas
 - [x] `/` — Landing page (Hero, Features, Events, Services, Contact)
+  - [x] Tipografía **Figtree** global (estilo Active Network) — commit `faf9474`
 - [x] `/eventos` — Listado público con filtros por deporte y buscador
   - [x] Hero con imagen profesional multi-disciplina (ciclismo de ruta, triatlón, calle, trekking) — commit `0bfe73a`
 - [x] `/eventos/[slug]` — Detalle de evento individual
@@ -71,6 +72,8 @@
 - [x] Persistencia garantizada (datos sobreviven redeploys)
 
 ### 🎨 Componentes UI
+- [x] **Tipografía Figtree** (next/font/google, 300–900) — alternativa libre a "GP Commerce" de activenetwork.com; variable `--font-figtree` en `<html>` + regla base en globals.css. **Nota:** Inter nunca llegó a aplicarse (la variable estaba en `<body>` y Tailwind v4 aplica la fuente en `<html>`) — corregido en `faf9474`
+- [x] **Hero multi-disciplina `/eventos`** — imagen WebP 2560x1440 (ciclismo, triatlón, calle, trekking) + overlays de legibilidad (`0bfe73a`)
 - [x] `FileUpload` (dropzone reutilizable) — `src/components/ui/file-upload.tsx`
 - [x] `SponsorsCarousel` (carrusel animado de logos) — `src/components/SponsorsCarousel.tsx`
 - [x] `MultiImageUpload` (carga múltiple inline en EventFormPage)
@@ -185,6 +188,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+faf9474 feat(diseno): tipografia Figtree estilo Active Network (alternativa libre a GP Commerce) + fix variable next/font en html
 0bfe73a feat(diseno): hero multi-disciplina en /eventos (ciclismo, triatlon, calle, trekking) 2560x1440 WebP nitido
 98be1de fix(build): eliminar 7 paginas duplicadas que rompian el build de Vercel
 1d7816c fix(admin): lista de eventos ya no muestra datos viejos tras borrar/editar (cache events-cache.ts + ?fresh=1)
