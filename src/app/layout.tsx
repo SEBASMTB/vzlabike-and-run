@@ -1,10 +1,12 @@
 import type { Metadata, Viewport } from "next";
-import { Inter } from "next/font/google";
+import { Figtree } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
-const inter = Inter({
-  variable: "--font-inter",
+// Figtree — alternativa libre a "GP Commerce" (la tipografía de activenetwork.com)
+// Rango 300–900 variable: body ligero (300), botones (600), títulos Black (900)
+const figtree = Figtree({
+  variable: "--font-figtree",
   subsets: ["latin"],
   display: "swap",
 });
@@ -49,7 +51,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="es" suppressHydrationWarning>
+    <html lang="es" suppressHydrationWarning className={figtree.variable}>
       <head>
         {/* DNS prefetch for external resources */}
         <link rel="dns-prefetch" href="https://vbr-results.vercel.app" />
@@ -57,7 +59,7 @@ export default function RootLayout({
         <link rel="dns-prefetch" href="https://fonts.googleapis.com" />
         <link rel="dns-prefetch" href="https://wa.me" />
       </head>
-      <body className={`${inter.variable} antialiased bg-background text-foreground`}>
+      <body className="antialiased bg-background text-foreground">
         {children}
         <Toaster />
       </body>
