@@ -255,10 +255,21 @@ export default function EventosPage() {
 
       <main className="flex-1 pt-20">
         {/* Hero Banner */}
-        <div className="relative bg-gradient-to-br from-gray-900 via-red-900/30 to-gray-900 py-16 md:py-24">
-          <div className="absolute inset-0 opacity-10">
-            <div className="absolute top-10 left-10 w-72 h-72 bg-red-500 rounded-full blur-3xl" />
-            <div className="absolute bottom-10 right-10 w-96 h-96 bg-red-600 rounded-full blur-3xl" />
+        <div className="relative overflow-hidden bg-gray-950 py-16 md:py-24">
+          {/* Imagen de fondo multi-disciplina: ciclismo, triatlón, calle y trekking */}
+          <div className="absolute inset-0">
+            <img
+              src="/hero-eventos.webp"
+              alt=""
+              aria-hidden="true"
+              className="h-full w-full object-cover"
+              fetchPriority="high"
+            />
+            {/* Overlays para legibilidad del texto sin perder nitidez */}
+            <div className="absolute inset-0 bg-gradient-to-r from-gray-950/90 via-gray-950/55 to-gray-950/25" />
+            <div className="absolute inset-0 bg-gradient-to-t from-gray-950/85 via-transparent to-gray-950/45" />
+            {/* Acento rojo de marca */}
+            <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-red-600 via-red-500 to-transparent" />
           </div>
           <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <Link
@@ -280,7 +291,7 @@ export default function EventosPage() {
               initial={{ opacity: 0, y: 20 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="text-lg text-white/70 max-w-2xl"
+              className="text-lg text-white/80 max-w-2xl [text-shadow:0_1px_4px_rgba(0,0,0,0.7)]"
             >
               Descubre todos los eventos deportivos organizados por VzlaBike
               and Run. Carreras, MTB, Triatlones y más en Venezuela.
