@@ -22,6 +22,8 @@ import {
   Activity,
   Zap,
   Radio,
+  Hash,
+  Landmark,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +53,11 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { motion } from "framer-motion";
 import {
+  accountLabel,
+  PAYMENT_METHOD_LABELS,
+  type PaymentAccount,
+} from "@/lib/payment-accounts";
+import {
   getCategoryPresets,
   type CategoryPreset,
   type CategoryOption,
@@ -68,6 +75,8 @@ interface CategoryRow {
   gender: string; // M, F, MIXTO
   distanceKm: string;
   price: string;
+  bibStart: string; // Lote de dorsales: inicio (vacío = sin lote)
+  bibEnd: string;   // Lote de dorsales: fin
 }
 
 interface EventFormData {
@@ -103,6 +112,8 @@ interface EventFormData {
   kitInfo: string;
   sponsors: string;
   sponsorsLogos: string;       // JSON array of {logo, name, url}
+  paymentAccounts: string;     // JSON array de cuentas de destino de pago
+  bibBoxSize: string;          // Tamaño del bloque de cajas físicas (100/150)
 }
 
 interface EventFormPageProps {
@@ -151,7 +162,48 @@ const defaultFormData: EventFormData = {
   kitInfo: "",
   sponsors: "",
   sponsorsLogos: "[]",
+  paymentAccounts: "[]",
+  bibBoxSize: "100",
 };
+
+/**
+ * Prioridad de orden para lotes correlativos: Élite primero, luego Juvenil,
+ * después el resto por edad mínima ascendente. Devuelve una clave ordenable.
+ */
+function bibPriority(cat: CategoryRow): number {
+  const name = (cat.name || "").toUpperCase();
+  if (name.includes("ÉLITE") || name.includes("ELITE")) return 0;
+  if (name.includes("JUVENIL") || name.includes("JUNIOR")) return 1;
+  return 2 + Math.min(cat.minAge, 80) / 100;
+}
+
+/**
+ * Valida que los lotes de dorsales no se solapen y sean rangos válidos.
+ * Devuelve null si todo está bien, o el mensaje de error.
+ */
+function bibOverlapError(categories: CategoryRow[]): string | null {
+  const ranges = categories
+    .filter((c) => c.bibStart !== "" && c.bibEnd !== "")
+    .map((c) => ({
+      name: c.name || "(sin nombre)",
+      s: parseInt(c.bibStart),
+      e: parseInt(c.bibEnd),
+    }));
+
+  for (const r of ranges) {
+    if (isNaN(r.s) || isNaN(r.e) || r.s < 1 || r.e < r.s) {
+      return `Rango de dorsales inválido en "${r.name}" — el inicial debe ser ≥ 1 y el final ≥ inicial`;
+    }
+  }
+
+  const sorted = [...ranges].sort((a, b) => a.s - b.s);
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].s <= sorted[i - 1].e) {
+      return `Lotes superpuestos: ${sorted[i - 1].name} (${sorted[i - 1].s}–${sorted[i - 1].e}) y ${sorted[i].name} (${sorted[i].s}–${sorted[i].e})`;
+    }
+  }
+  return null;
+}
 
 // ============================================================
 // Helper: Generate categories by interval
@@ -183,6 +235,8 @@ function generateCategories(interval: 5 | 10, basePrice: number): CategoryRow[] 
         gender: "M",
         distanceKm: "",
         price: String(basePrice),
+        bibStart: "",
+        bibEnd: "",
       });
       categories.push({
         name: `${label} F`,
@@ -191,6 +245,8 @@ function generateCategories(interval: 5 | 10, basePrice: number): CategoryRow[] 
         gender: "F",
         distanceKm: "",
         price: String(basePrice),
+        bibStart: "",
+        bibEnd: "",
       });
     }
   } else {
@@ -212,6 +268,8 @@ function generateCategories(interval: 5 | 10, basePrice: number): CategoryRow[] 
         gender: "M",
         distanceKm: "",
         price: String(basePrice),
+        bibStart: "",
+        bibEnd: "",
       });
       categories.push({
         name: `${label} F`,
@@ -220,6 +278,8 @@ function generateCategories(interval: 5 | 10, basePrice: number): CategoryRow[] 
         gender: "F",
         distanceKm: "",
         price: String(basePrice),
+        bibStart: "",
+        bibEnd: "",
       });
     }
   }
@@ -259,6 +319,8 @@ export default function EventFormPage({
     maxAge: 99,
     distanceKm: "",
     price: "0",
+    bibStart: "",
+    bibEnd: "",
   });
 
   // Available presets based on selected sport type
@@ -286,6 +348,8 @@ export default function EventFormPage({
       gender: c.gender || "MIXTO",
       distanceKm: "",
       price: String(basePrice),
+      bibStart: "",
+      bibEnd: "",
     }));
     setCategories(rows);
     toast({
@@ -327,6 +391,45 @@ export default function EventFormPage({
     });
   };
 
+  /**
+   * Auto-calcular lotes correlativos: reparte el cupo del evento en bloques
+   * consecutivos por categoría, dejando los números más bajos para Élite y
+   * Juvenil. Ejemplo con 500 cupos y 16 categorías: Élite M/F 1–31 y 32–62.
+   */
+  const handleAutoCalcBibs = () => {
+    if (categories.length === 0) {
+      toast({
+        title: "Sin categorías",
+        description: "Agrega categorías antes de calcular los lotes",
+        variant: "destructive",
+      });
+      return;
+    }
+    const total = parseInt(formData.maxParticipants) || 500;
+    const perCat = Math.max(1, Math.floor(total / categories.length));
+
+    // Ordenar índices por prioridad (Élite → Juvenil → por edad)
+    const order = categories
+      .map((cat, idx) => ({ idx, cat }))
+      .sort((a, b) => bibPriority(a.cat) - bibPriority(b.cat));
+
+    const next = [...categories];
+    let cursor = 1;
+    for (const { idx } of order) {
+      const start = cursor;
+      const end = Math.min(start + perCat - 1, total);
+      next[idx] = { ...next[idx], bibStart: String(start), bibEnd: String(end) };
+      cursor = end + 1;
+      if (cursor > total) break;
+    }
+
+    setCategories(next);
+    toast({
+      title: "Lotes calculados",
+      description: `${categories.length} bloques correlativos de ~${perCat} dorsales — Élite y Juvenil con los números más bajos`,
+    });
+  };
+
   const handleAddSpecialCategory = () => {
     setCategories((prev) => [
       ...prev,
@@ -337,6 +440,8 @@ export default function EventFormPage({
         gender: "MIXTO",
         distanceKm: "",
         price: formData.price || "0",
+        bibStart: "",
+        bibEnd: "",
       },
     ]);
   };
@@ -372,6 +477,17 @@ export default function EventFormPage({
       toast({
         title: "Slug requerido",
         description: "El slug no puede estar vacío",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Validación de lotes de dorsales: sin solapamientos ni rangos inválidos
+    const bibErr = bibOverlapError(categories);
+    if (bibErr) {
+      toast({
+        title: "Lotes de dorsales inválidos",
+        description: bibErr,
         variant: "destructive",
       });
       return;
@@ -413,6 +529,8 @@ export default function EventFormPage({
         kitInfo: formData.kitInfo,
         sponsors: formData.sponsors,
         sponsorsLogos: formData.sponsorsLogos,
+        paymentAccounts: formData.paymentAccounts,
+        bibBoxSize: parseInt(formData.bibBoxSize) || 100,
         category: formData.sportType,
         categories: "",
       };
@@ -463,6 +581,8 @@ export default function EventFormPage({
                 gender: cat.gender,
                 distanceKm: cat.distanceKm ? parseFloat(cat.distanceKm) : null,
                 price: parseFloat(cat.price) || 0,
+                bibStart: cat.bibStart ? parseInt(cat.bibStart) : null,
+                bibEnd: cat.bibEnd ? parseInt(cat.bibEnd) : null,
               })),
             }),
           }
@@ -937,6 +1057,58 @@ export default function EventFormPage({
         </Card>
       </motion.div>
 
+      {/* ─── Datos de Pago del Evento ───────────────────────── */}
+      <motion.div {...fadeUp} transition={{ delay: 0.15 }}>
+        <Card className="p-6">
+          <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+            <Landmark className="size-5 text-red-500" />
+            Datos de Pago y Cajas de Entrega
+          </h2>
+
+          <div className="space-y-5">
+            {/* Tamaño de bloque de cajas físicas */}
+            <div className="space-y-2 max-w-xs">
+              <Label className="flex items-center gap-1 text-sm font-semibold">
+                <Hash className="size-3.5" /> Tamaño de caja de entrega
+              </Label>
+              <Select
+                value={formData.bibBoxSize}
+                onValueChange={(v) => updateField("bibBoxSize", v)}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="100">Bloques de 100 (1–99, 100–199…)</SelectItem>
+                  <SelectItem value="150">Bloques de 150 (1–149, 150–299…)</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Al aprobar una inscripción, el corredor verá su dorsal y la caja
+                física donde retira su kit, número y chip.
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Cuentas de destino de pago (visibles solo en el Paso 3 del wizard) */}
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1 text-sm font-semibold">
+                <HandCoins className="size-3.5" /> Cuentas para pagar (Pago Móvil, Zelle, Binance…)
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                Estas cuentas se muestran al corredor únicamente en el Paso 3
+                (Pago) del formulario de inscripción.
+              </p>
+              <PaymentAccountsEditor
+                value={formData.paymentAccounts}
+                onChange={(json) => updateField("paymentAccounts", json)}
+              />
+            </div>
+          </div>
+        </Card>
+      </motion.div>
+
       {/* ─── Smart Category Generator ───────────────────────── */}
       <motion.div {...fadeUp} transition={{ delay: 0.2 }}>
         <Card className="p-6">
@@ -1053,6 +1225,8 @@ export default function EventFormPage({
                         gender: c.gender || "MIXTO",
                         distanceKm: "",
                         price: formData.price || "0",
+                        bibStart: "",
+                        bibEnd: "",
                       }));
                       setCategories(allAsRows);
                     }}
@@ -1097,6 +1271,8 @@ export default function EventFormPage({
                                 gender: cat.gender || "MIXTO",
                                 distanceKm: "",
                                 price: formData.price || "0",
+                                bibStart: "",
+                                bibEnd: "",
                               },
                             ]);
                           } else {
@@ -1151,6 +1327,15 @@ export default function EventFormPage({
             >
               <Plus className="size-4" />
               Agregar Categoría Especial
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+              onClick={handleAutoCalcBibs}
+            >
+              <Hash className="size-4" />
+              Auto-calcular lotes correlativos
             </Button>
           </div>
 
@@ -1255,6 +1440,8 @@ export default function EventFormPage({
                     maxAge: 99,
                     distanceKm: "",
                     price: formData.price || "0",
+                    bibStart: "",
+                    bibEnd: "",
                   });
                   setShowSpecialCategoryForm(false);
                 }}
@@ -1276,6 +1463,8 @@ export default function EventFormPage({
                       <TableHead className="text-xs w-28">Edad</TableHead>
                       <TableHead className="text-xs w-24">Dist. KM</TableHead>
                       <TableHead className="text-xs w-24">Precio</TableHead>
+                      <TableHead className="text-xs w-24">Dorsal desde</TableHead>
+                      <TableHead className="text-xs w-24">Dorsal hasta</TableHead>
                       <TableHead className="text-xs w-12"></TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1340,6 +1529,30 @@ export default function EventFormPage({
                           />
                         </TableCell>
                         <TableCell>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={cat.bibStart}
+                            onChange={(e) =>
+                              handleUpdateCategory(idx, "bibStart", e.target.value)
+                            }
+                            className="h-8 text-sm w-20 font-mono"
+                            placeholder="—"
+                          />
+                        </TableCell>
+                        <TableCell>
+                          <Input
+                            type="number"
+                            min="1"
+                            value={cat.bibEnd}
+                            onChange={(e) =>
+                              handleUpdateCategory(idx, "bibEnd", e.target.value)
+                            }
+                            className="h-8 text-sm w-20 font-mono"
+                            placeholder="—"
+                          />
+                        </TableCell>
+                        <TableCell>
                           <Button
                             variant="ghost"
                             size="icon"
@@ -1354,9 +1567,12 @@ export default function EventFormPage({
                   </TableBody>
                 </Table>
               </div>
-              <div className="border-t px-4 py-2 bg-muted/30">
+              <div className="border-t px-4 py-2 bg-muted/30 flex items-center justify-between gap-2">
                 <p className="text-xs text-muted-foreground">
                   {categories.length} categorías activas
+                </p>
+                <p className="text-[11px] text-muted-foreground">
+                  Lote vacío = el dorsal se asigna con el primer número libre global al aprobar
                 </p>
               </div>
             </div>
@@ -1584,6 +1800,194 @@ function SponsorsLogosEditor({
         hint="Logo cuadrado preferido (PNG transparente)"
         aspectRatio="square"
       />
+    </div>
+  );
+}
+
+// ============================================================
+// PaymentAccountsEditor — Cuentas de destino de pago del evento
+// (JSON array de PaymentAccount; visible solo en el Paso 3 del wizard)
+// ============================================================
+
+const ACCOUNT_METHODS = [
+  "movil",
+  "transferencia",
+  "zelle",
+  "binance",
+  "divisas",
+  "otro",
+] as const;
+
+/** Campos que se muestran según el método de la cuenta */
+function accountFieldsFor(method: string): Array<{
+  key: keyof PaymentAccount;
+  label: string;
+  placeholder: string;
+}> {
+  switch (method) {
+    case "movil":
+      return [
+        { key: "banco", label: "Banco", placeholder: "Ej. Banesco" },
+        { key: "telefono", label: "Teléfono afiliado", placeholder: "0412-1234567" },
+        { key: "cedula", label: "Cédula/RIF titular", placeholder: "V-12345678" },
+      ];
+    case "transferencia":
+      return [
+        { key: "banco", label: "Banco", placeholder: "Ej. Banco Nacional" },
+        { key: "cuenta", label: "Número de cuenta", placeholder: "0000-0000-00-0000000000" },
+        { key: "cedula", label: "Cédula/RIF titular", placeholder: "V-12345678" },
+      ];
+    case "zelle":
+      return [
+        { key: "correo", label: "Correo Zelle", placeholder: "pagos@vzlabike.com" },
+        { key: "cedula", label: "Nombre del titular", placeholder: "Titular de la cuenta" },
+      ];
+    case "binance":
+      return [
+        { key: "wallet", label: "Binance ID / Wallet", placeholder: "ID: 123456789" },
+      ];
+    case "divisas":
+      return [
+        { key: "banco", label: "Banco / Entidad", placeholder: "Ej. Bank of America" },
+        { key: "cuenta", label: "Número de cuenta", placeholder: "0000000000" },
+      ];
+    default:
+      return [{ key: "notas", label: "Instrucciones", placeholder: "Indicaciones del pago" }];
+  }
+}
+
+function PaymentAccountsEditor({
+  value,
+  onChange,
+}: {
+  value: string; // JSON array de PaymentAccount
+  onChange: (json: string) => void;
+}) {
+  const accounts: PaymentAccount[] = (() => {
+    try {
+      const arr = JSON.parse(value || "[]");
+      return Array.isArray(arr) ? arr : [];
+    } catch {
+      return [];
+    }
+  })();
+
+  const updateAccount = (idx: number, patch: Partial<PaymentAccount>) => {
+    const next = accounts.map((a, i) => (i === idx ? { ...a, ...patch } : a));
+    onChange(JSON.stringify(next));
+  };
+
+  const removeAccount = (idx: number) => {
+    onChange(JSON.stringify(accounts.filter((_, i) => i !== idx)));
+  };
+
+  const addAccount = () => {
+    const next = [...accounts, { method: "movil", label: "" } as PaymentAccount];
+    onChange(JSON.stringify(next));
+  };
+
+  return (
+    <div className="space-y-3">
+      {accounts.length === 0 && (
+        <div className="rounded-lg border border-dashed border-gray-300 bg-gray-50 px-4 py-6 text-center">
+          <p className="text-sm text-muted-foreground">
+            Sin cuentas configuradas — el corredor verá un aviso para pagar por
+            el canal habitual del evento.
+          </p>
+        </div>
+      )}
+
+      {accounts.map((acc, idx) => {
+        const fields = accountFieldsFor(acc.method || "otro");
+        return (
+          <div
+            key={idx}
+            className="rounded-lg border bg-white p-3 space-y-3"
+          >
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1 min-w-[180px]">
+                <Label className="text-xs">Método</Label>
+                <Select
+                  value={acc.method || "otro"}
+                  onValueChange={(v) => updateAccount(idx, { method: v })}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {ACCOUNT_METHODS.map((m) => (
+                      <SelectItem key={m} value={m}>
+                        {PAYMENT_METHOD_LABELS[m] || m}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1 flex-1 min-w-[200px]">
+                <Label className="text-xs">Etiqueta (opcional)</Label>
+                <Input
+                  value={acc.label || ""}
+                  onChange={(e) => updateAccount(idx, { label: e.target.value })}
+                  placeholder={`Ej. ${PAYMENT_METHOD_LABELS[acc.method || "otro"] || "Cuenta"} oficial del evento`}
+                  className="h-8 text-sm"
+                />
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="size-8 text-muted-foreground hover:text-red-600 shrink-0"
+                onClick={() => removeAccount(idx)}
+                aria-label="Eliminar cuenta"
+              >
+                <Trash2 className="size-4" />
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+              {fields.map((f) => (
+                <div key={String(f.key)} className="space-y-1">
+                  <Label className="text-xs">{f.label}</Label>
+                  <Input
+                    value={(acc[f.key] as string) || ""}
+                    onChange={(e) =>
+                      updateAccount(idx, { [f.key]: e.target.value } as Partial<PaymentAccount>)
+                    }
+                    placeholder={f.placeholder}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {acc.method === "movil" && (
+              <div className="space-y-1">
+                <Label className="text-xs">Notas adicionales (opcional)</Label>
+                <Input
+                  value={acc.notas || ""}
+                  onChange={(e) => updateAccount(idx, { notas: e.target.value })}
+                  placeholder="Ej. Solo pagos móviles nacionales"
+                  className="h-8 text-sm"
+                />
+              </div>
+            )}
+
+            <p className="text-[11px] text-muted-foreground">
+              Vista previa: <strong>{accountLabel(acc)}</strong>
+            </p>
+          </div>
+        );
+      })}
+
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        onClick={addAccount}
+        className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+      >
+        <Plus className="size-3 mr-1" /> Agregar cuenta de pago
+      </Button>
     </div>
   );
 }

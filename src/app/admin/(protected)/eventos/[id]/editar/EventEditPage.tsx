@@ -12,6 +12,8 @@ interface EventEditPageProps {
     gender: string;
     distanceKm: number | null;
     price: number;
+    bibStart?: number | null;
+    bibEnd?: number | null;
   }>;
 }
 
@@ -52,6 +54,8 @@ export default function EventEditPage({ eventData, categories }: EventEditPagePr
     kitInfo: String(eventData.kitInfo || ""),
     sponsors: String(eventData.sponsors || ""),
     sponsorsLogos: String(eventData.sponsorsLogos || "[]"),
+    paymentAccounts: String(eventData.paymentAccounts || "[]"),
+    bibBoxSize: String(eventData.bibBoxSize ?? 100),
   };
 
   const initialCategories = categories.map((cat) => ({
@@ -62,6 +66,8 @@ export default function EventEditPage({ eventData, categories }: EventEditPagePr
     gender: cat.gender,
     distanceKm: cat.distanceKm != null ? String(cat.distanceKm) : "",
     price: String(cat.price),
+    bibStart: cat.bibStart != null ? String(cat.bibStart) : "",
+    bibEnd: cat.bibEnd != null ? String(cat.bibEnd) : "",
   }));
 
   return (

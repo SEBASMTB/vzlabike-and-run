@@ -41,6 +41,8 @@ export default async function EditarEventoPage({
         gender: cat.gender,
         distanceKm: cat.distanceKm,
         price: cat.price,
+        bibStart: cat.bibStart,
+        bibEnd: cat.bibEnd,
       }))}
     />
   );

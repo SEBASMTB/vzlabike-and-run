@@ -16,6 +16,8 @@ import { requireAuth } from "@/lib/auth";
  *     gender: string;  // M, F, MIXTO
  *     distanceKm?: number;
  *     price?: number;
+ *     bibStart?: number | null;  // Lote de dorsales: inicio (opcional)
+ *     bibEnd?: number | null;    // Lote de dorsales: fin (opcional)
  *   }>
  * }
  */
@@ -63,6 +65,8 @@ export async function POST(
           gender: string;
           distanceKm?: number | null;
           price?: number | null;
+          bibStart?: number | null;
+          bibEnd?: number | null;
         }) => ({
           eventId,
           name: cat.name,
@@ -71,6 +75,18 @@ export async function POST(
           gender: cat.gender || "M",
           distanceKm: cat.distanceKm ?? null,
           price: cat.price ?? event.price ?? 0,
+          bibStart:
+            cat.bibStart != null &&
+            Number.isFinite(Number(cat.bibStart)) &&
+            Number(cat.bibStart) > 0
+              ? Number(cat.bibStart)
+              : null,
+          bibEnd:
+            cat.bibEnd != null &&
+            Number.isFinite(Number(cat.bibEnd)) &&
+            Number(cat.bibEnd) > 0
+              ? Number(cat.bibEnd)
+              : null,
         })),
       });
 
