@@ -3,6 +3,53 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assignBibForRegistration, releaseBib } from "@/lib/bib-assignment";
 import { bibBoxLabel } from "@/lib/payment-accounts";
+import { sendApprovalEmail } from "@/lib/email";
+
+/** Envía el correo de aprobación; jamás bloquea ni lanza */
+async function notifyApproval(regId: string): Promise<{
+  emailSent?: boolean;
+  emailSkipped?: boolean;
+  emailError?: string;
+  emailSentTo?: string;
+}> {
+  try {
+    const reg = await db.registration.findUnique({ where: { id: regId } });
+    if (!reg) return {};
+    const event = await db.event.findUnique({ where: { id: reg.eventId } });
+    let categoryName: string | null = reg.category || null;
+    if (reg.categoryId) {
+      try {
+        const cat = await db.category.findUnique({
+          where: { id: reg.categoryId },
+          select: { name: true },
+        });
+        if (cat) categoryName = cat.name;
+      } catch {}
+    }
+    const result = await sendApprovalEmail({
+      firstName: reg.firstName,
+      lastName: reg.lastName,
+      email: reg.email || "",
+      eventTitle: event?.title || "",
+      eventDate: event?.date ? String(event.date) : null,
+      eventLocation: event?.location || null,
+      eventDistance: event?.distance || null,
+      categoryName,
+      bibNumber: reg.bibNumber,
+      bibBoxLabel: reg.bibBoxLabel || null,
+      eventSlug: event?.slug || null,
+    });
+    return {
+      emailSent: result.sent,
+      emailSkipped: result.skipped,
+      emailError: result.error,
+      emailSentTo: result.sent ? reg.email : undefined,
+    };
+  } catch (err) {
+    console.error("[API admin registrations PATCH] notifyApproval error:", err);
+    return { emailError: "fallo al preparar el correo" };
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -173,9 +220,12 @@ export async function PATCH(
         );
       }
       if (manualBib != null) {
-        let event = null;
+        let event: { bibBoxSize?: number | null } | null = null;
         try {
-          event = await db.event.findUnique({ where: { id: existing.eventId } });
+          event = await db.event.findUnique({
+            where: { id: existing.eventId },
+            select: { bibBoxSize: true },
+          });
         } catch {}
         data.bibNumber = Math.round(manualBib);
         data.bibBoxLabel = bibBoxLabel(Math.round(manualBib), event?.bibBoxSize || 100);
@@ -201,20 +251,36 @@ export async function PATCH(
     if (newStatus === "APPROVED" && registration.bibNumber == null) {
       const assigned = await assignBibForRegistration(registration.id);
       if (assigned.bibNumber != null) {
+        // Correo automático al corredor (dorsal + caja + evento), nunca bloquea
+        const email = await notifyApproval(registration.id);
         return NextResponse.json({
           ...registration,
           bibNumber: assigned.bibNumber,
           bibBoxLabel: assigned.bibBoxLabel,
           bibAssigned: true,
+          ...email,
         });
       }
+      // Aprobado sin dorsal (lote lleno): correo avisando que va "en asignación"
+      const email = await notifyApproval(registration.id);
       return NextResponse.json({
         ...registration,
         bibNumber: null,
         bibBoxLabel: null,
         bibAssigned: false,
         bibWarning: assigned.reason || "No se pudo asignar dorsal",
+        ...email,
       });
+    }
+
+    // Aprobación de una inscripción que ya tenía dorsal (p.ej. re-aprobada
+    // manualmente): también notifica si antes NO estaba aprobada
+    if (
+      newStatus === "APPROVED" &&
+      String(existing.status || "").toUpperCase() !== "APPROVED"
+    ) {
+      const email = await notifyApproval(registration.id);
+      return NextResponse.json({ ...registration, ...email });
     }
 
     return NextResponse.json(registration);

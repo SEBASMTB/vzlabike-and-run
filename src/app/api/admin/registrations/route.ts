@@ -49,6 +49,7 @@ export async function GET(request: NextRequest) {
               r.emergencyContact, r.emergencyPhone,
               r.emergName, r.emergPhone, r.emergRelation,
               e.title as eventTitle, e.date as eventDate,
+              e.slug as eventSlug, e.location as eventLocation,
               c.name as categoryName
        FROM Registration r
        LEFT JOIN Event e ON r.eventId = e.id
@@ -63,7 +64,13 @@ export async function GET(request: NextRequest) {
     const registrations = rows.map((r) => ({
       ...r,
       event: r.eventTitle
-        ? { id: r.eventId, title: r.eventTitle, date: r.eventDate }
+        ? {
+            id: r.eventId,
+            title: r.eventTitle,
+            date: r.eventDate,
+            slug: r.eventSlug || null,
+            location: r.eventLocation || null,
+          }
         : null,
       category: r.categoryName
         ? { id: r.categoryId, name: r.categoryName }

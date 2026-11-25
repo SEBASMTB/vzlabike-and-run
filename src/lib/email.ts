@@ -190,3 +190,224 @@ export async function sendPreRegistrationEmail(data: EmailRegistrationData): Pro
     return false;
   }
 }
+
+// ============================================================
+// CORREO DE INSCRIPCIÓN APROBADA (dorsal + caja de retiro)
+// ============================================================
+
+interface ApprovalEmailData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  eventTitle: string;
+  eventDate?: string | null;
+  eventLocation?: string | null;
+  eventDistance?: string | null;
+  categoryName?: string | null;
+  bibNumber: number | null;
+  bibBoxLabel?: string | null;
+  eventSlug?: string | null;
+}
+
+function generateApprovalHTML(data: ApprovalEmailData): string {
+  const formattedDate = data.eventDate
+    ? formatEventDate(data.eventDate, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "";
+  const eventUrl = `${SITE_URL}${data.eventSlug ? `/eventos/${data.eventSlug}` : "/eventos"}`;
+
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscripcion Aprobada - ${data.eventTitle}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, Helvetica, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); padding: 30px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: bold;">
+                VzlaBike and Run
+              </h1>
+              <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.7); font-size: 14px;">
+                Inscripcion Aprobada
+              </p>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 8px 0; font-size: 16px; color: #333333;">
+                Hola <strong>${data.firstName} ${data.lastName}</strong>,
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 16px; color: #16a34a; font-weight: bold;">
+                Tu pago fue aprobado. Ya estas inscrito en el evento.
+              </p>
+
+              <!-- Dorsal Destacado -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background: linear-gradient(135deg, #0f3460 0%, #16213e 100%); border-radius: 12px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 28px 20px; text-align: center;">
+                    <p style="margin: 0; color: rgba(255,255,255,0.75); font-size: 13px; text-transform: uppercase; letter-spacing: 1px;">Tu numero de corredor</p>
+                    <p style="margin: 8px 0 0 0; color: #ffffff; font-size: 52px; font-weight: bold; line-height: 1;">${
+                      data.bibNumber != null ? `#${data.bibNumber}` : "En asignacion"
+                    }</p>
+                    ${
+                      data.bibBoxLabel
+                        ? `<p style="margin: 12px 0 0 0; color: #fbbf24; font-size: 16px; font-weight: 600;">Caja de retiro del kit: ${data.bibBoxLabel}</p>`
+                        : ""
+                    }
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Event Card -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #1a1a2e;">
+                      ${data.eventTitle}
+                    </h2>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      ${
+                        formattedDate
+                          ? `<tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="color: #888888; font-size: 13px;">FECHA</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${formattedDate}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        data.eventLocation
+                          ? `<tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="color: #888888; font-size: 13px;">LUGAR</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${data.eventLocation}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        data.eventDistance
+                          ? `<tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="color: #888888; font-size: 13px;">DISTANCIA</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${data.eventDistance}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        data.categoryName
+                          ? `<tr>
+                        <td style="padding: 8px 0;">
+                          <span style="color: #888888; font-size: 13px;">CATEGORIA</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${data.categoryName}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Important Notice -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #fffbeb; border-radius: 8px; border: 1px solid #fbbf24; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.5;">
+                      <strong>El dia del evento:</strong> presenta este correo o tu cedula en la caja de retiro${data.bibBoxLabel ? ` (${data.bibBoxLabel})` : ""} para recibir tu kit: franela, numero de corredor y chip de cronometraje.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td align="center">
+                    <a href="${eventUrl}" style="display: inline-block; background-color: #0f3460; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                      Ver detalles del evento
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0; font-size: 14px; color: #777777; line-height: 1.6;">
+                Te esperamos en la linea de partida. Mucha suerte!
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 24px 40px; border-top: 1px solid #e2e8f0; text-align: center;">
+              <p style="margin: 0 0 4px 0; font-size: 14px; color: #333333; font-weight: 600;">
+                VzlaBike and Run
+              </p>
+              <p style="margin: 0 0 4px 0; font-size: 12px; color: #999999;">
+                ${FROM_EMAIL}
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #bbb;">
+                <a href="${SITE_URL}" style="color: #0f3460; text-decoration: none;">${SITE_URL}</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Correo de INSCRIPCIÓN APROBADA: dorsal, categoría, caja de retiro y datos
+ * del evento. No lanza excepciones — devuelve {sent:false, error} si no hay
+ * API key o el envío falla, para que la aprobación nunca se bloquee.
+ */
+export async function sendApprovalEmail(
+  data: ApprovalEmailData
+): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
+  try {
+    if (!data.email || !data.email.includes("@")) {
+      return { sent: false, skipped: true, error: "El corredor no tiene correo registrado" };
+    }
+    if (!process.env.RESEND_API_KEY) {
+      console.log(
+        `Email: RESEND_API_KEY no configurada — aprobación de ${data.firstName} ${data.lastName} (${data.email}) no notificada por correo`
+      );
+      return { sent: false, skipped: true, error: "RESEND_API_KEY no configurada" };
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      to: [data.email],
+      subject: `Inscripcion aprobada${data.bibNumber != null ? ` — Dorsal #${data.bibNumber}` : ""} — ${data.eventTitle}`,
+      html: generateApprovalHTML(data),
+    });
+
+    console.log(`Email de aprobación enviado a ${data.email} (dorsal ${data.bibNumber ?? "n/d"})`);
+    return { sent: true };
+  } catch (error) {
+    console.error("Error enviando email de aprobación:", error);
+    return { sent: false, error: String(error).slice(0, 200) };
+  }
+}

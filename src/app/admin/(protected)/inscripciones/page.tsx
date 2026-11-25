@@ -33,6 +33,7 @@ import {
   Zap,
   KeyRound,
   ClipboardList,
+  MessageCircle,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -76,6 +77,7 @@ import {
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 import { PAYMENT_METHOD_LABELS } from "@/lib/payment-accounts";
+import { whatsappApprovalUrl } from "@/lib/notify";
 
 // ============================================================
 // Types
@@ -84,7 +86,13 @@ import { PAYMENT_METHOD_LABELS } from "@/lib/payment-accounts";
 interface Registration {
   id: string;
   eventId: string;
-  event: { id?: string; title: string; date?: string };
+  event: {
+    id?: string;
+    title: string;
+    date?: string;
+    slug?: string | null;
+    location?: string | null;
+  };
   runnerId: string;
   runner: {
     id: string;
@@ -178,6 +186,12 @@ interface QuickResult {
   bibNumber: number | null;
   bibBoxLabel: string | null;
   bibWarning?: string;
+  firstName?: string;
+  lastName?: string;
+  phone?: string;
+  eventTitle?: string;
+  categoryName?: string;
+  emailSent?: boolean;
 }
 
 const statusColors: Record<string, string> = {
@@ -237,6 +251,30 @@ function normalizeStatus(status: string): string {
   if (s === "APPROVED" || s === "CONFIRMED") return "APPROVED";
   if (s === "REJECTED") return "REJECTED";
   return status;
+}
+
+/** Teléfono del corredor (runner nuevo o campo legacy) */
+function getRunnerPhone(reg: Registration): string {
+  return reg.runner?.telefono || reg.phone || "";
+}
+
+/**
+ * URL de WhatsApp con el mensaje de confirmación armado
+ * (nombre, evento, categoría, dorsal y caja de retiro). Null si no hay teléfono válido.
+ */
+function waApprovalUrlFor(reg: Registration): string | null {
+  if (normalizeStatus(reg.status) !== "APPROVED") return null;
+  return whatsappApprovalUrl(getRunnerPhone(reg), {
+    firstName: reg.runner?.nombres || reg.firstName,
+    lastName: reg.runner?.apellidos || reg.lastName,
+    eventTitle: reg.event?.title || "",
+    eventDate: reg.event?.date || null,
+    eventLocation: reg.event?.location || null,
+    eventSlug: reg.event?.slug || null,
+    categoryName: reg.category?.name || null,
+    bibNumber: reg.bibNumber,
+    bibBoxLabel: reg.bibBoxLabel || null,
+  });
 }
 
 // ============================================================
@@ -427,9 +465,13 @@ export default function AdminInscripcionesPage() {
           newStatus === "APPROVED" && data?.bibNumber
             ? ` — Dorsal #${data.bibNumber} asignado (${data.bibBoxLabel || "caja"})`
             : "";
+        const emailMsg =
+          newStatus === "APPROVED" && data?.emailSent && data?.emailSentTo
+            ? ` · Correo enviado a ${data.emailSentTo}`
+            : "";
         toast({
           title: "Estado actualizado",
-          description: `Inscripción ${statusLabels[newStatus] || newStatus}${bibMsg}`,
+          description: `Inscripción ${statusLabels[newStatus] || newStatus}${bibMsg}${emailMsg}`,
         });
         fetchRegistrations();
         if (data?.bibWarning) {
@@ -882,12 +924,19 @@ export default function AdminInscripcionesPage() {
           bibNumber: data.bibNumber ?? null,
           bibBoxLabel: data.bibBoxLabel ?? null,
           bibWarning: data.bibWarning,
+          firstName: quickForm.firstName.trim(),
+          lastName: quickForm.lastName.trim(),
+          phone: quickForm.phone.trim(),
+          eventTitle:
+            events.find((ev) => ev.id === quickForm.eventId)?.title || "",
+          categoryName: quickCats.find((c) => c.id === quickForm.categoryId)?.name || "",
+          emailSent: Boolean(data.emailSent),
         });
         toast({
           title: "Inscripción rápida creada",
           description:
             data.bibNumber != null
-              ? `Aprobada con dorsal #${data.bibNumber} — ${data.bibBoxLabel || ""}`
+              ? `Aprobada con dorsal #${data.bibNumber} — ${data.bibBoxLabel || ""}${data.emailSent ? " · Correo enviado" : ""}`
               : "Aprobada (dorsal pendiente de asignación)",
         });
         fetchRegistrations();
@@ -1322,6 +1371,26 @@ export default function AdminInscripcionesPage() {
                               >
                                 <Eye className="size-4" />
                               </Button>
+                              {(() => {
+                                const waUrl = waApprovalUrlFor(reg);
+                                return waUrl ? (
+                                  <a
+                                    href={waUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    title="Notificar por WhatsApp (dorsal + caja)"
+                                    aria-label="Notificar al corredor por WhatsApp"
+                                  >
+                                    <Button
+                                      variant="ghost"
+                                      size="icon"
+                                      className="size-8 text-emerald-600 hover:bg-emerald-50"
+                                    >
+                                      <MessageCircle className="size-4" />
+                                    </Button>
+                                  </a>
+                                ) : null;
+                              })()}
                               <AlertDialog>
                                 <AlertDialogTrigger asChild>
                                   <Button
@@ -1815,7 +1884,36 @@ export default function AdminInscripcionesPage() {
                     {quickResult.bibWarning || "Dorsal pendiente de asignación"}
                   </p>
                 )}
+                {quickResult.emailSent && (
+                  <p className="mt-1 text-xs text-emerald-700">
+                    Correo de confirmación enviado al corredor
+                  </p>
+                )}
               </div>
+              {(() => {
+                const waUrl = whatsappApprovalUrl(quickResult.phone, {
+                  firstName: quickResult.firstName || "",
+                  lastName: quickResult.lastName || "",
+                  eventTitle: quickResult.eventTitle || "",
+                  categoryName: quickResult.categoryName || null,
+                  bibNumber: quickResult.bibNumber,
+                  bibBoxLabel: quickResult.bibBoxLabel,
+                });
+                if (!waUrl) return null;
+                return (
+                  <a
+                    href={waUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block"
+                  >
+                    <Button className="w-full bg-[#25d366] text-white hover:bg-[#20bd5a] border-0">
+                      <MessageCircle className="size-4" />
+                      Avisarle por WhatsApp ahora
+                    </Button>
+                  </a>
+                );
+              })()}
               <div className="flex justify-end">
                 <Button variant="outline" onClick={() => setQuickOpen(false)}>
                   Cerrar
@@ -2295,6 +2393,26 @@ export default function AdminInscripcionesPage() {
                   </Button>
                 </div>
               )}
+
+              {/* Notificar al corredor aprobado por WhatsApp (1 clic) */}
+              {(() => {
+                const waUrl = waApprovalUrlFor(selectedReg);
+                if (!waUrl) return null;
+                return (
+                  <div className="pt-2">
+                    <a href={waUrl} target="_blank" rel="noopener noreferrer">
+                      <Button className="w-full bg-[#25d366] text-white hover:bg-[#20bd5a] border-0">
+                        <MessageCircle className="size-4" />
+                        Notificar por WhatsApp (dorsal + caja)
+                      </Button>
+                    </a>
+                    <p className="text-xs text-muted-foreground mt-1 text-center">
+                      Se abre WhatsApp con el mensaje ya armado para{" "}
+                      {getRunnerPhone(selectedReg) || "el corredor"}
+                    </p>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </DialogContent>

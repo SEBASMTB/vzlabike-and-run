@@ -2,6 +2,42 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assignBibForRegistration } from "@/lib/bib-assignment";
+import { sendApprovalEmail } from "@/lib/email";
+
+/** Correo de aprobación por inscripción; jamás lanza */
+async function notifyApprovalSafe(regId: string): Promise<boolean> {
+  try {
+    const reg = await db.registration.findUnique({ where: { id: regId } });
+    if (!reg?.email) return false;
+    const event = await db.event.findUnique({ where: { id: reg.eventId } });
+    let categoryName: string | null = reg.category || null;
+    if (reg.categoryId) {
+      try {
+        const cat = await db.category.findUnique({
+          where: { id: reg.categoryId },
+          select: { name: true },
+        });
+        if (cat) categoryName = cat.name;
+      } catch {}
+    }
+    const result = await sendApprovalEmail({
+      firstName: reg.firstName,
+      lastName: reg.lastName,
+      email: reg.email,
+      eventTitle: event?.title || "",
+      eventDate: event?.date ? String(event.date) : null,
+      eventLocation: event?.location || null,
+      eventDistance: event?.distance || null,
+      categoryName,
+      bibNumber: reg.bibNumber,
+      bibBoxLabel: reg.bibBoxLabel || null,
+      eventSlug: event?.slug || null,
+    });
+    return result.sent;
+  } catch {
+    return false;
+  }
+}
 
 /**
  * POST /api/admin/registrations/bulk
@@ -85,8 +121,9 @@ export async function POST(request: NextRequest) {
     }
 
     // ── approve: secuencial para que los lotes no choquen entre sí ──
-    const approved: Array<{ id: string; bibNumber: number | null; bibBoxLabel: string | null }> = [];
+    const approved: Array<{ id: string; bibNumber: number | null; bibBoxLabel: string | null; emailSent: boolean }> = [];
     const failed: Array<{ id: string; error: string }> = [];
+    let emailsSent = 0;
     for (const id of ids) {
       try {
         const existing = await db.registration.findUnique({ where: { id } });
@@ -94,15 +131,24 @@ export async function POST(request: NextRequest) {
           failed.push({ id, error: "No encontrada" });
           continue;
         }
+        const wasApproved =
+          String(existing.status || "").toUpperCase() === "APPROVED";
         await db.registration.update({
           where: { id },
           data: { status: "APPROVED" },
         });
         const assigned = await assignBibForRegistration(id);
+        // Correo al corredor solo en transiciones NUEVAS a aprobado
+        const emailSent =
+          !wasApproved && action === "approve"
+            ? await notifyApprovalSafe(id)
+            : false;
+        if (emailSent) emailsSent++;
         approved.push({
           id,
           bibNumber: assigned.bibNumber,
           bibBoxLabel: assigned.bibBoxLabel,
+          emailSent,
         });
         if (assigned.bibNumber == null) {
           failed.push({ id, error: assigned.reason || "Sin dorsal" });
@@ -112,7 +158,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    return NextResponse.json({ action: "approve", approved, failed });
+    return NextResponse.json({ action: "approve", approved, failed, emailsSent });
   } catch (err) {
     console.error("[API admin registrations bulk] Error:", err);
     return NextResponse.json(

@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assignBibForRegistration } from "@/lib/bib-assignment";
 import { normalizePaymentRef } from "@/lib/payment-accounts";
+import { sendApprovalEmail } from "@/lib/email";
 
 /**
  * POST /api/admin/registrations/quick
@@ -174,12 +175,50 @@ export async function POST(request: NextRequest) {
       where: { id: registration.id },
     });
 
+    // Correo de aprobación al corredor (si dejó email); nunca bloquea
+    let emailSent = false;
+    let emailSkipped: boolean | undefined;
+    let emailError: string | undefined;
+    try {
+      let categoryName = categorySnapshot;
+      if (resolvedCategoryId && !categoryName) {
+        try {
+          const cat = await db.category.findUnique({
+            where: { id: resolvedCategoryId },
+            select: { name: true },
+          });
+          if (cat) categoryName = cat.name;
+        } catch {}
+      }
+      const emailResult = await sendApprovalEmail({
+        firstName: String(firstName).trim(),
+        lastName: String(lastName).trim(),
+        email: email ? String(email).trim() : "",
+        eventTitle: event.title || "",
+        eventDate: event.date ? String(event.date) : null,
+        eventLocation: event.location || null,
+        eventDistance: event.distance || null,
+        categoryName,
+        bibNumber: assigned.bibNumber,
+        bibBoxLabel: assigned.bibBoxLabel,
+        eventSlug: event.slug || null,
+      });
+      emailSent = emailResult.sent;
+      emailSkipped = emailResult.skipped;
+      emailError = emailResult.error;
+    } catch (emailErr) {
+      console.error("[API quick] email aprobación omitido:", emailErr);
+    }
+
     return NextResponse.json(
       {
         ...final,
         bibNumber: assigned.bibNumber,
         bibBoxLabel: assigned.bibBoxLabel,
         bibWarning: assigned.bibNumber == null ? assigned.reason : undefined,
+        emailSent,
+        emailSkipped,
+        emailError,
       },
       { status: 201 }
     );
