@@ -11,6 +11,7 @@ export async function GET(request: NextRequest) {
     const eventId = searchParams.get("eventId");
     const status = searchParams.get("status");
     const search = searchParams.get("search");
+    const categoryId = searchParams.get("categoryId");
     const page = parseInt(searchParams.get("page") || "1");
     const limit = parseInt(searchParams.get("limit") || "10");
     const offset = (page - 1) * limit;
@@ -20,6 +21,10 @@ export async function GET(request: NextRequest) {
 
     if (eventId) {
       whereParts.push(`r.eventId = '${eventId.replace(/'/g, "''")}'`);
+    }
+
+    if (categoryId && categoryId !== "all") {
+      whereParts.push(`r.categoryId = '${categoryId.replace(/'/g, "''")}'`);
     }
 
     if (status && status !== "todos" && status !== "all") {

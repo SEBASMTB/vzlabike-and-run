@@ -24,6 +24,7 @@ export async function GET(request: NextRequest) {
                 description, price, priceBs, status, featured, hasShirt,
                 hasShirtOption, shirtPrice, categoryInterval, ageCalcMode,
                 organizer, maxParticipants, requiresFederationLicense,
+                (SELECT COUNT(*) FROM Registration r WHERE r.eventId = Event.id) AS registrationCount,
                 createdAt, updatedAt
          FROM Event
          ORDER BY date ASC`
@@ -56,6 +57,7 @@ export async function GET(request: NextRequest) {
               description, price, priceBs, status, featured, hasShirt,
               hasShirtOption, shirtPrice, categoryInterval, ageCalcMode,
               organizer, maxParticipants, requiresFederationLicense,
+              (SELECT COUNT(*) FROM Registration r WHERE r.eventId = Event.id) AS registrationCount,
               createdAt, updatedAt
        FROM Event
        ORDER BY date ASC`

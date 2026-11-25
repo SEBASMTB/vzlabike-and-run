@@ -60,20 +60,29 @@ export async function GET(request: NextRequest) {
     }
 
     // ── Obtener inscripciones aprobadas/pendientes con datos del runner ──
-    const registrations = await db.registration.findMany({
-      where: {
-        eventId,
-        status: { in: ["PENDING", "APPROVED"] },
-      },
-      include: {
-        runner: true,
-        category: true,
-      },
-      orderBy: [
-        { bibNumber: "asc" },
-        { createdAt: "asc" },
-      ],
-    });
+    // Raw SQL con JOINs (patrón probado en producción); los includes de
+    // Prisma fallan porque la relación de categoría se llama categoryRef.
+    const eventIdSafe = eventId.replace(/'/g, "''");
+    const registrations = await db.$queryRawUnsafe(
+      `SELECT r.id, r.firstName, r.lastName, r.dateOfBirth, r.gender,
+              r.category, r.team, r.ciudad, r.phone,
+              r.emergencyContact, r.emergencyPhone, r.emergName, r.emergPhone,
+              r.bibNumber, r.chipCode,
+              run.nombres AS runnerNombres, run.apellidos AS runnerApellidos,
+              run.fechaNacimiento AS runnerFechaNacimiento,
+              run.genero AS runnerGenero, run.team AS runnerTeam,
+              run.ciudad AS runnerCiudad, run.telefono AS runnerTelefono,
+              run.contactoEmergenciaNombre AS runnerEmergNombre,
+              run.contactoEmergenciaTelefono AS runnerEmergTelefono,
+              run.grupoSanguineo AS runnerGrupoSanguineo,
+              c.name AS categoryName
+       FROM Registration r
+       LEFT JOIN Runner run ON r.runnerId = run.id
+       LEFT JOIN Category c ON r.categoryId = c.id
+       WHERE r.eventId = '${eventIdSafe}'
+         AND LOWER(r.status) IN ('pending', 'approved', 'confirmed')
+       ORDER BY (r.bibNumber IS NULL), r.bibNumber ASC, r.createdAt ASC`
+    ) as any[];
 
     if (registrations.length === 0) {
       return NextResponse.json(
@@ -131,27 +140,25 @@ export async function GET(request: NextRequest) {
 
     // ── Data rows ──────────────────────────────────────────
     for (const reg of registrations) {
-      const runner = reg.runner;
-
       // CRITICAL: fechaNacimiento as DD/MM/YYYY (ChuckScore standard)
-      const dobDDMMYYYY = runner.fechaNacimiento
-        ? formatDateDDMMYYYY(new Date(runner.fechaNacimiento))
+      const dobDDMMYYYY = reg.runnerFechaNacimiento
+        ? formatDateDDMMYYYY(new Date(reg.runnerFechaNacimiento))
         : reg.dateOfBirth || "";
 
       const row = sheet.addRow([
         reg.bibNumber || "",
         reg.chipCode || "",
-        runner.nombres || reg.firstName || "",
-        runner.apellidos || reg.lastName || "",
+        reg.runnerNombres || reg.firstName || "",
+        reg.runnerApellidos || reg.lastName || "",
         dobDDMMYYYY,
-        normalizeGender(runner.genero || reg.gender),
-        reg.category?.name || "",
-        runner.team || reg.team || "",
-        runner.ciudad || "",
-        runner.telefono || reg.phone || "",
-        runner.contactoEmergenciaNombre || reg.emergencyContact || "",
-        runner.contactoEmergenciaTelefono || reg.emergencyPhone || "",
-        runner.grupoSanguineo || "",
+        normalizeGender(reg.runnerGenero || reg.gender),
+        reg.categoryName || reg.category || "",
+        reg.runnerTeam || reg.team || "",
+        reg.runnerCiudad || reg.ciudad || "",
+        reg.runnerTelefono || reg.phone || "",
+        reg.runnerEmergNombre || reg.emergencyContact || reg.emergName || "",
+        reg.runnerEmergTelefono || reg.emergencyPhone || reg.emergPhone || "",
+        reg.runnerGrupoSanguineo || "",
       ]);
 
       // Alternating row colors

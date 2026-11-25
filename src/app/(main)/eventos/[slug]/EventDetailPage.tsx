@@ -1016,6 +1016,13 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
                           Cupos agotados
                         </p>
                       )}
+                      <Link
+                        href={`/eventos/${event.slug}/inscritos`}
+                        className="inline-flex items-center gap-1.5 text-xs font-medium text-red-600 hover:text-red-700 mt-1"
+                      >
+                        <Users className="size-3.5" />
+                        Ver lista de inscritos ({event.registrationCount})
+                      </Link>
                     </div>
 
                     <Separator />

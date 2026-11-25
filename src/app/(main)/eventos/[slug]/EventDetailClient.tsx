@@ -75,9 +75,18 @@ export function EventDetailClient({ slug }: EventDetailClientProps) {
     categories = parseEventCategories(event.categories, event.sportType || "running");
   }
 
+  // El API del evento expone registrationCount (inscritos reales en BD);
+  // fallback a _count.registrations y finalmente 0 si no viene.
+  const registrationCount =
+    typeof event.registrationCount === "number"
+      ? event.registrationCount
+      : typeof event._count?.registrations === "number"
+        ? event._count.registrations
+        : 0;
+
   return (
     <EventDetailPage
-      event={{ ...event, registrationCount: 0 }}
+      event={{ ...event, registrationCount }}
       categories={categories}
     />
   );

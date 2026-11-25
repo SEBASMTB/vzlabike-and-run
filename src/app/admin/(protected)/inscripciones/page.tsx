@@ -28,6 +28,7 @@ import {
   Heart,
   Droplets,
   Trash2,
+  Users,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -129,6 +130,7 @@ interface Registration {
 interface EventsData {
   id: string;
   title: string;
+  slug?: string;
 }
 
 interface CategoryData {
@@ -217,6 +219,7 @@ export default function AdminInscripcionesPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [exportingExcel, setExportingExcel] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchEvents = useCallback(async () => {
@@ -420,6 +423,51 @@ export default function AdminInscripcionesPage() {
     }
   };
 
+  // Exportación general a Excel con TODOS los campos, respetando los
+  // filtros activos del panel (evento, estado, categoría y búsqueda).
+  const handleExportExcel = async () => {
+    setExportingExcel(true);
+    try {
+      const params = new URLSearchParams();
+      if (eventFilter !== "all") params.set("eventId", eventFilter);
+      if (statusFilter !== "todos") params.set("status", statusFilter);
+      if (categoryFilter !== "all") params.set("categoryId", categoryFilter);
+      if (search) params.set("search", search);
+
+      const res = await fetch(
+        `/api/admin/export/inscripciones?${params.toString()}`
+      );
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error || "Error al exportar");
+      }
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = ""; // usa el filename del Content-Disposition
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+
+      toast({
+        title: "Exportación exitosa",
+        description: `Archivo Excel descargado (${total} inscripciones)`,
+      });
+    } catch (error) {
+      toast({
+        title: "Error de exportación",
+        description:
+          error instanceof Error ? error.message : "Error desconocido",
+        variant: "destructive",
+      });
+    } finally {
+      setExportingExcel(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -432,21 +480,51 @@ export default function AdminInscripcionesPage() {
             Revisa y gestiona las inscripciones de los participantes
           </p>
         </div>
-        {eventFilter !== "all" && (
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+          {eventFilter !== "all" && (
+            <Button
+              variant="outline"
+              className="border-blue-200 text-blue-600 hover:bg-blue-50"
+              onClick={() => {
+                const ev = events.find((e) => e.id === eventFilter);
+                if (ev?.slug) {
+                  window.open(`/eventos/${ev.slug}/inscritos`, "_blank");
+                }
+              }}
+            >
+              <Users className="size-4" />
+              Lista pública
+            </Button>
+          )}
+          {eventFilter !== "all" && (
+            <Button
+              variant="outline"
+              className="border-emerald-200 text-emerald-600 hover:bg-emerald-50"
+              onClick={handleChuckScoreExport}
+              disabled={exporting}
+            >
+              {exporting ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Download className="size-4" />
+              )}
+              ChuckScore (.xlsx)
+            </Button>
+          )}
           <Button
             variant="outline"
-            className="border-emerald-200 text-emerald-600 hover:bg-emerald-50 shrink-0"
-            onClick={handleChuckScoreExport}
-            disabled={exporting}
+            className="border-red-200 text-red-600 hover:bg-red-50 shrink-0"
+            onClick={handleExportExcel}
+            disabled={exportingExcel}
           >
-            {exporting ? (
+            {exportingExcel ? (
               <Loader2 className="size-4 animate-spin" />
             ) : (
               <FileSpreadsheet className="size-4" />
             )}
-            Exportar ChuckScore (.xlsx)
+            Exportar Excel (.xlsx)
           </Button>
-        )}
+        </div>
       </div>
 
       {/* Filters */}
