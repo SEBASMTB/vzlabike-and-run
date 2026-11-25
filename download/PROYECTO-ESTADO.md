@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `d8ce9e9`)  
+> Última actualización: 2026-11-25 (commit `75eb592`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -122,8 +122,16 @@
 - [x] **Exportación ChuckScore** — **solo APROBADOS**, ordenada por dorsal, con columna **Kit Box** (caja física) — `1a6313b`
 - [x] Botón "Lista pública" + filtro por categoría funcional — `0b1b979`
 
-### ⚙️ Motor de dorsales (nuevo — `d739ff1`)
-- [x] **Asignación atómica al aprobar** (`src/lib/bib-assignment.ts`): primer número LIBRE dentro del lote `bibStart–bibEnd` de la categoría; si no hay lote (o está lleno) → primer libre global (1..max); reintentos ante conflicto de concurrencia
+### ⚙️ Motor de dorsales (nuevo — `d739ff1`, corregido `75eb592`)
+- [x] **ORDEN CANÓNICO del organizador (`75eb592`)**: los números más bajos son SIEMPRE para **Élite** (masculino y femenino), luego **Juvenil**, y de ahí correlativo **de menor a mayor edad** (Sub-23/Libre → Máster A → B → C…). Un corredor SOLO recibe números dentro del lote de SU categoría — **jamás el #1 ni números de otras categorías**
+- [x] **MARGEN de reserva: +10 números por categoría** (`RESERVA_PRESENCIAL=10` en `src/lib/bib-lots.ts`) para las inscripciones presenciales del sábado, sin cruzar rangos entre categorías. Reflejado igual en el auto-cálculo del panel y en la asignación automática
+- [x] **Lote explícito** (`Category.bibStart/bibEnd`) se respeta estricto; **sin lote → lote IMPLÍCITO** calculado con el mismo orden canónico + reserva (el evento siempre asigna en orden aunque el organizador no configure nada)
+- [x] **Lote lleno → motivo claro** en la respuesta admin ("El lote de X (a–b) está lleno…") — **NUNCA invada el rango de otra categoría**; el fallback global (1..max) solo existe si el evento no tiene ninguna categoría
+- [x] **Asignación atómica al aprobar** (`src/lib/bib-assignment.ts`): primer número LIBRE dentro del lote de la categoría; reintentos ante conflicto de concurrencia **dentro del mismo lote**
+- [x] **Bulk de categorías = UPSERT por identidad** (`75eb592`): actualizar el evento desde el panel conserva los IDs de las categorías existentes → `Registration.categoryId` ya no se rompe (antes delete+recreate rompía los enlaces)
+- [x] **PUT categoría individual soporta `bibStart`/`bibEnd`** (`75eb592`)
+- [x] **Test unitario 21/21** (`scripts/test-bib-lots.ts`): Élite recibe #1, Máster C en su lote (575–615), lote lleno no invade, rangos correlativos sin cruces
+- [x] **APLICADO EN PRODUCCIÓN (`75eb592` + script `apply-lotes-produccion.sh`)**: CAMPAÑA ADMIRABLE con 16 lotes (Élite M 1–41 … Máster D 616–656); las 3 inscripciones mal asignadas fueron re-aprobadas: FELIPI (Máster D) 1→**616**, NATHALIE (Máster B F) 3→**493**, FUNDACION (Máster C) 2→**575**; E2E Élite→bib 1 y Máster C→bib 576 confirmó el orden (datos de prueba eliminados)
 - [x] **PENDING/REJECTED nunca queman dorsales** (bibNumber queda NULL; rechazar/devolver a pendiente libera el número)
 - [x] **Índice único parcial** `(eventId, bibNumber)` en BD — última barrera anti-duplicados
 - [x] **Cajas físicas**: `bibBoxLabel` se calcula al aprobar según `Event.bibBoxSize` (convención del organizador: 100 → 1–99, 100–199…; 150 → 1–149, 150–299…)
@@ -154,6 +162,7 @@
 ├── prisma/schema.prisma           # Runner + Event + Category(+bibStart/End) + Registration(+rejectReason/bibBoxLabel) + PaymentRecord + Product
 ├── src/lib/db.ts                  # Prisma factory (Turso→file→/tmp) + DDL + EXPECTED_COLUMNS + índices únicos + normalización estados
 ├── src/lib/bib-assignment.ts      # ⭐ Asignación atómica de dorsales (lote por categoría, reintentos)
+├── src/lib/bib-lots.ts            # ⭐ Orden canónico Élite→Juvenil→edad + RESERVA_PRESENCIAL=10 (compartido panel/servidor)
 ├── src/lib/payment-accounts.ts    # ⭐ Cuentas de pago (tipos, parse, labels) + normalizePaymentRef + bibBoxLabel
 ├── src/lib/categories.ts          # Generadores de categorías + presets
 ├── src/middleware.ts              # Auth middleware /admin/*

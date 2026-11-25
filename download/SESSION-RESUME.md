@@ -14,7 +14,7 @@ Estoy trabajando en el proyecto VzlaBike and Run, una plataforma de cronometraje
 - Deploy Vercel: https://vzlabike-and-run.vercel.app
 - Admin: https://vzlabike-and-run.vercel.app/admin/login (pass: vzlabike2024)
 - Base de datos: Turso (libsql://vzlabikeandrun-vbrresult.aws-us-west-2.turso.io)
-- Última sesión cerrada: 2026-11-25, HEAD = cb25c17
+- Última sesión cerrada: 2026-11-25, HEAD = 75eb592
 - Guía de staging: download/STAGING-SETUP.md (subdominio + Turso separada, aún sin crear)
 
 == ARCHIVO DE ESTADO COMPLETO ==
@@ -104,12 +104,45 @@ El usuario dio luz verde al rediseño completo y se implementó TODO en 8 commit
   inscritos 200. NOTA: un check de conciliación falló por lag de réplica Turso (lectura
   desactualizada un instante); el matching funciona — informativo, no requiere acción.
 
+== LO ÚLTIMO QUE SE HIZO (2026-11-25, FIX DORSALES `75eb592`) ==
+
+El usuario reportó: al inscribirse como Máster C recibió el dorsal #1. CAUSA: el evento no
+tenía lotes configurados y `assignBibForRegistration` tenía un fallback global (primer libre
+1..max) que asignaba #1, #2, #3 por orden de aprobación (todos a categorías Máster).
+
+CORRECCIÓN (commit `75eb592`, verificado en producción):
+1. NUEVO `src/lib/bib-lots.ts` (puro, compartido panel/servidor): `bibLotPriority` (Élite=0,
+   Juvenil/Junior=1, resto 2+minAge/100), `computeOrderedLotRanges` (bloque base
+   floor(total/n) + RESERVA_PRESENCIAL=10 por categoría), orden canónico:
+   Élite (M y F) → Juvenil → menor a mayor edad. Ties por orden estable del array.
+2. `bib-assignment.ts` REESCRITO: lote explícito se respeta ESTRICTO; sin lote → lote
+   IMPLÍCITO ordenado con reserva; lote lleno → reason claro SIN invadir otras categorías;
+   fallback global SOLO si el evento no tiene categorías; reintento P2002 dentro del mismo lote.
+3. EventFormPage: auto-calcular usa computeOrderedLotRanges (botón "Auto-calcular lotes
+   (+10 reserva sábado)"), aviso de solapamiento inline bajo los botones, texto explicativo
+   del orden canónico.
+4. BUG EXTRA corregido: bulk de categorías era delete+recreate (rompía Registration.categoryId
+   al editar el evento) → ahora UPSERT por identidad (name|gender|minAge|maxAge) conservando
+   IDs. PUT categoría individual ahora soporta bibStart/bibEnd.
+5. Test unitario `scripts/test-bib-lots.ts` 21/21 pass (Élite #1, Máster C en su lote, lleno
+   no invade, correlativos sin cruces).
+6. PRODUCCIÓN (script `scripts/apply-lotes-produccion.sh`): 16 lotes aplicados a CAMPAÑA
+   ADMIRABLE vía bulk upsert (IDs preservados: updated=16, created=0, removed=0). Lotes:
+   Élite M 1–41, Juvenil 42–82, Femenino Sport 83–123, 100 Kilos 124–164, Duplas/E-Bike
+   165–328, Organismos 288–328, Senior 329–369, Recreativo 370–410, Máster A F 411–451,
+   Máster A M 452–492, Máster B F 493–533, Máster B M 534–574, Máster C 575–615,
+   Máster D 616–656. RE-APROBADAS las 3 inscripciones (PATCH PENDING→APPROVED):
+   FELIPI 1→616 (Caja 600–699), NATHALIE 3→493 (Caja 400–499), FUNDACION 2→575 (Caja
+   500–599). E2E: quick-register Élite→bib 1 ✓, Máster C→bib 576 ✓, ambos ELIMINADOS al
+   final. Participantes público verificado (bib+caja sin PII).
+
 == CONFIGURACIÓN QUE EL USUARIO DEBE HACER EN EL PANEL (10 min) ==
 1. Editar evento real → "Datos de Pago y Cajas de Entrega": cargar cuentas reales
    (Pago Móvil/Zelle/Binance) y tamaño de caja (100/150).
-2. Sección 4 → lotes de dorsales por categoría o "Auto-calcular lotes correlativos".
-   (Sin lotes, el sistema asigna primer libre global: los bibs existentes 2 y 3 se
-   respetan, el próximo será el 1.)
+2. Sección 4 → lotes de dorsales por categoría o "Auto-calcular lotes (+10 reserva
+   sábado)". NOTA `75eb592`: aunque NO configure lotes, el motor ya asigna con lote
+   implícito en orden canónico Élite→Juvenil→edad con reserva — pero conviene
+   configurarlos explícitos para verlos/editarlos en el panel.
 
 == SIGUIENTE PASO ==
 1. (Opcional) Crear staging con download/STAGING-SETUP.md.
