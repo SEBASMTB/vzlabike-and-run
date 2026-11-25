@@ -106,7 +106,7 @@ export async function PUT(
 
     const { id: eventId } = await params;
     const body = await request.json();
-    const { categoryId, name, gender, minAge, maxAge, distanceKm, price } = body;
+    const { categoryId, name, gender, minAge, maxAge, distanceKm, price, bibStart, bibEnd } = body;
 
     if (!categoryId) {
       return NextResponse.json(
@@ -123,6 +123,17 @@ export async function PUT(
     if (distanceKm !== undefined)
       data.distanceKm = distanceKm != null ? Number(distanceKm) : null;
     if (price !== undefined) data.price = Number(price) || 0;
+    // Lote de dorsales: enteros positivos → número; vacío/0/negativo → NULL
+    if (bibStart !== undefined)
+      data.bibStart =
+        bibStart != null && Number.isFinite(Number(bibStart)) && Number(bibStart) > 0
+          ? Math.round(Number(bibStart))
+          : null;
+    if (bibEnd !== undefined)
+      data.bibEnd =
+        bibEnd != null && Number.isFinite(Number(bibEnd)) && Number(bibEnd) > 0
+          ? Math.round(Number(bibEnd))
+          : null;
 
     await db.category.updateMany({
       where: { id: categoryId, eventId },

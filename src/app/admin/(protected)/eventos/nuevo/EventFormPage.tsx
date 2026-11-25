@@ -62,6 +62,10 @@ import {
   type CategoryPreset,
   type CategoryOption,
 } from "@/lib/categories";
+import {
+  computeOrderedLotRanges,
+  RESERVA_PRESENCIAL,
+} from "@/lib/bib-lots";
 
 // ============================================================
 // Types
@@ -165,17 +169,6 @@ const defaultFormData: EventFormData = {
   paymentAccounts: "[]",
   bibBoxSize: "100",
 };
-
-/**
- * Prioridad de orden para lotes correlativos: Élite primero, luego Juvenil,
- * después el resto por edad mínima ascendente. Devuelve una clave ordenable.
- */
-function bibPriority(cat: CategoryRow): number {
-  const name = (cat.name || "").toUpperCase();
-  if (name.includes("ÉLITE") || name.includes("ELITE")) return 0;
-  if (name.includes("JUVENIL") || name.includes("JUNIOR")) return 1;
-  return 2 + Math.min(cat.minAge, 80) / 100;
-}
 
 /**
  * Valida que los lotes de dorsales no se solapen y sean rangos válidos.
@@ -393,8 +386,10 @@ export default function EventFormPage({
 
   /**
    * Auto-calcular lotes correlativos: reparte el cupo del evento en bloques
-   * consecutivos por categoría, dejando los números más bajos para Élite y
-   * Juvenil. Ejemplo con 500 cupos y 16 categorías: Élite M/F 1–31 y 32–62.
+   * consecutivos por categoría en el orden canónico (Élite → Juvenil → menor
+   * a mayor edad) y añade un MARGEN de RESERVA_PRESENCIAL (10) números por
+   * categoría para las inscripciones presenciales del sábado. Ejemplo con 500
+   * cupos y 16 categorías: bloques de 41 (31 + 10) — Élite M 1–41, Juvenil 42–82…
    */
   const handleAutoCalcBibs = () => {
     if (categories.length === 0) {
@@ -406,27 +401,26 @@ export default function EventFormPage({
       return;
     }
     const total = parseInt(formData.maxParticipants) || 500;
-    const perCat = Math.max(1, Math.floor(total / categories.length));
 
-    // Ordenar índices por prioridad (Élite → Juvenil → por edad)
-    const order = categories
-      .map((cat, idx) => ({ idx, cat }))
-      .sort((a, b) => bibPriority(a.cat) - bibPriority(b.cat));
+    // Lotes ordenados con margen de reserva (mismo código que usa el motor
+    // de asignación en el servidor → lo que ves aquí es lo que se aplica)
+    const lots = computeOrderedLotRanges(categories, total, RESERVA_PRESENCIAL);
 
+    // Mapear por referencia a los índices originales del estado
+    const indexByRef = new Map(categories.map((cat, idx) => [cat, idx]));
     const next = [...categories];
-    let cursor = 1;
-    for (const { idx } of order) {
-      const start = cursor;
-      const end = Math.min(start + perCat - 1, total);
-      next[idx] = { ...next[idx], bibStart: String(start), bibEnd: String(end) };
-      cursor = end + 1;
-      if (cursor > total) break;
+    for (const { cat, start, end } of lots) {
+      const idx = indexByRef.get(cat);
+      if (idx != null) {
+        next[idx] = { ...next[idx], bibStart: String(start), bibEnd: String(end) };
+      }
     }
 
     setCategories(next);
+    const block = lots[0] ? lots[0].end - lots[0].start + 1 : 0;
     toast({
       title: "Lotes calculados",
-      description: `${categories.length} bloques correlativos de ~${perCat} dorsales — Élite y Juvenil con los números más bajos`,
+      description: `${categories.length} bloques correlativos de ${block} dorsales (${block - RESERVA_PRESENCIAL} + ${RESERVA_PRESENCIAL} de reserva del sábado) — Élite primero, luego de menor a mayor edad`,
     });
   };
 
@@ -1301,7 +1295,10 @@ export default function EventFormPage({
           )}
 
           {/* Action buttons */}
-          <div className="flex flex-wrap gap-3 mb-4">
+          <div className="flex flex-wrap gap-3 mb-2 items-center">
+            <p className="text-xs text-muted-foreground basis-full">
+              Los dorsales se asignan por lote de categoría en orden canónico: <strong>Élite primero (números más bajos)</strong>, luego Juvenil y de menor a mayor edad. El auto-cálculo deja <strong>+{RESERVA_PRESENCIAL} números de reserva por categoría</strong> para las inscripciones del sábado, sin cruzar rangos. Si una categoría no tiene lote, el sistema calcula uno implícito con este mismo orden.
+            </p>
             <Button
               type="button"
               variant="outline"
@@ -1335,8 +1332,13 @@ export default function EventFormPage({
               onClick={handleAutoCalcBibs}
             >
               <Hash className="size-4" />
-              Auto-calcular lotes correlativos
+              Auto-calcular lotes (+{RESERVA_PRESENCIAL} reserva sábado)
             </Button>
+            {bibOverlapError(categories) && (
+              <p className="text-xs text-red-600 font-medium self-center">
+                {bibOverlapError(categories)}
+              </p>
+            )}
           </div>
 
           {/* Special Category Form */}
