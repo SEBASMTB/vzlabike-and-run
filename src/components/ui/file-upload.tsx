@@ -4,6 +4,40 @@ import { useRef, useState, useCallback } from "react";
 import { UploadCloud, X, ImageIcon, FileText } from "lucide-react";
 import { cn } from "@/lib/utils";
 
+/**
+ * Compress an image in the browser (max 1600px on the longest side, JPEG).
+ * Keeps the base64 payload small so uploads travel safely inside JSON
+ * (serverless request bodies are capped ~4.5MB).
+ */
+function compressImage(
+  file: File,
+  maxDim = 1600,
+  quality = 0.82
+): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error("read"));
+    reader.onload = () => {
+      const img = new window.Image();
+      img.onerror = () => reject(new Error("decode"));
+      img.onload = () => {
+        const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+        const w = Math.max(1, Math.round(img.width * scale));
+        const h = Math.max(1, Math.round(img.height * scale));
+        const canvas = document.createElement("canvas");
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return reject(new Error("canvas"));
+        ctx.drawImage(img, 0, 0, w, h);
+        resolve(canvas.toDataURL("image/jpeg", quality));
+      };
+      img.src = reader.result as string;
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
 interface FileUploadProps {
   value?: string; // base64 data URL or empty
   onChange: (base64: string) => void;
@@ -36,9 +70,18 @@ export function FileUpload({
     (file: File) => {
       setError("");
 
+      // Los PDF viajan sin comprimir dentro del JSON: tope absoluto de 3MB
+      // (base64 crece ~33% y el límite serverless es ~4.5MB).
+      const effectiveMax =
+        file.type === "application/pdf" ? Math.min(maxSize, 3) : maxSize;
+
       // Validate size
-      if (file.size > maxSize * 1024 * 1024) {
-        setError(`El archivo supera ${maxSize}MB`);
+      if (file.size > effectiveMax * 1024 * 1024) {
+        setError(
+          file.type === "application/pdf" && maxSize > 3
+            ? "El PDF supera 3MB"
+            : `El archivo supera ${effectiveMax}MB`
+        );
         return;
       }
 
@@ -58,6 +101,20 @@ export function FileUpload({
           setError(`Tipo no permitido. Acepta: ${accept}`);
           return;
         }
+      }
+
+      // Imágenes > 400KB se comprimen en el navegador (máx 1600px, JPEG);
+      // si falla la compresión, se envía el archivo original.
+      if (file.type.startsWith("image/") && file.size > 400 * 1024) {
+        compressImage(file)
+          .then((b64) => onChange(b64))
+          .catch(() => {
+            const reader = new FileReader();
+            reader.onloadend = () => onChange(reader.result as string);
+            reader.onerror = () => setError("Error al leer el archivo");
+            reader.readAsDataURL(file);
+          });
+        return;
       }
 
       const reader = new FileReader();

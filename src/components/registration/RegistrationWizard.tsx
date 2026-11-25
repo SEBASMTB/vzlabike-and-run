@@ -353,6 +353,21 @@ export function RegistrationWizard({
     return calcAge(d);
   }, [formData.fechaNacimiento]);
 
+  // Diagnóstico EN VIVO de la fecha de nacimiento: se muestra al instante
+  // bajo el campo (sin esperar al botón "Siguiente") para que el atleta
+  // nunca vea una edad absurda (p. ej. "-1 años") sin explicación. Esto
+  // ocurre cuando el año se escribe mal (p. ej. "27" → 2027 en el input).
+  const birthDateIssue = useMemo(() => {
+    if (!formData.fechaNacimiento) return null;
+    const d = parseAnyDate(formData.fechaNacimiento);
+    if (!d) return "Fecha inválida — selecciona día, mes y año";
+    const age = calcAge(d);
+    if (age < 0) return "La fecha no puede ser futura — verifica el año";
+    if (age < 5) return "Edad mínima para inscribirse: 5 años";
+    if (age > 100) return "Verifica el año — la edad supera 100 años";
+    return null;
+  }, [formData.fechaNacimiento]);
+
   const selectedCategory = useMemo(
     () => categories.find((c) => c.id === formData.categoryId) || null,
     [categories, formData.categoryId]
@@ -434,13 +449,9 @@ export function RegistrationWizard({
       else if (formData.cedula.trim().length < 5) newErrors.cedula = "Mínimo 5 caracteres";
       if (!formData.nombres.trim()) newErrors.nombres = "Nombres requeridos";
       if (!formData.apellidos.trim()) newErrors.apellidos = "Apellidos requeridos";
-      if (!formData.fechaNacimiento) newErrors.fechaNacimiento = "Fecha de nacimiento requerida";
-      else {
-        const d = parseAnyDate(formData.fechaNacimiento);
-        if (!d) newErrors.fechaNacimiento = "Fecha inválida";
-        else if (calcAge(d) < 5) newErrors.fechaNacimiento = "Edad no válida para inscribirse";
-        else if (calcAge(d) > 100) newErrors.fechaNacimiento = "Verifica la fecha";
-      }
+      if (!formData.fechaNacimiento)
+        newErrors.fechaNacimiento = "Fecha de nacimiento requerida";
+      else if (birthDateIssue) newErrors.fechaNacimiento = birthDateIssue;
       if (!formData.email.trim()) newErrors.email = "Correo requerido";
       else if (!emailRegex.test(formData.email)) newErrors.email = "Correo inválido";
       if (!formData.telefono.trim()) newErrors.telefono = "Teléfono requerido";
@@ -557,6 +568,9 @@ export function RegistrationWizard({
         team: finalTeam || "",
         emergencyContact: formData.emergName.trim(),
         emergencyPhone: formData.emergPhone.trim(),
+        emergRelation: formData.emergRelation,
+        estado: formData.estado,
+        ciudad: formData.ciudad.trim(),
         paymentMethod: formData.paymentMethod,
         paymentRef: formData.paymentRef.trim(),
         paymentProof: formData.paymentProof || "",
@@ -805,6 +819,7 @@ export function RegistrationWizard({
                         runner,
                         isEditing,
                         calculatedAge,
+                        birthDateIssue,
                         errors,
                         update,
                         setIsEditing,
@@ -1011,6 +1026,7 @@ interface Step1Props {
   runner: RegRunner | null | undefined;
   isEditing: boolean;
   calculatedAge: number | null;
+  birthDateIssue: string | null;
   errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
   update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
   setIsEditing: (v: boolean) => void;
@@ -1022,6 +1038,7 @@ function renderStep1({
   runner,
   isEditing,
   calculatedAge,
+  birthDateIssue,
   errors,
   update,
   setIsEditing,
@@ -1212,7 +1229,8 @@ function renderStep1({
             value={formData.fechaNacimiento}
             onChange={(e) => update("fechaNacimiento", e.target.value)}
             disabled={fieldsDisabled}
-            aria-invalid={!!errors.fechaNacimiento}
+            max={toInputDate(new Date())}
+            aria-invalid={!!errors.fechaNacimiento || !!birthDateIssue}
           />
           <FieldError message={errors.fechaNacimiento} />
         </div>
@@ -1221,9 +1239,19 @@ function renderStep1({
           <Label className="mb-1.5 block">
             <Trophy className="size-3.5" /> Edad calculada
           </Label>
-          <div className="flex h-9 items-center rounded-md border border-gray-200 bg-gray-50 px-3 text-sm">
+          <div
+            className={`flex h-9 items-center rounded-md border px-3 text-sm ${
+              birthDateIssue
+                ? "border-red-300 bg-red-50"
+                : "border-gray-200 bg-gray-50"
+            }`}
+          >
             {calculatedAge !== null ? (
-              <span className="font-semibold text-gray-800">
+              <span
+                className={`font-semibold ${
+                  birthDateIssue ? "text-red-600" : "text-gray-800"
+                }`}
+              >
                 {calculatedAge} años
               </span>
             ) : (
@@ -1232,6 +1260,11 @@ function renderStep1({
               </span>
             )}
           </div>
+          {birthDateIssue && (
+            <p className="mt-1 flex items-center gap-1 text-xs font-medium text-red-600">
+              <AlertCircle className="size-3" /> {birthDateIssue}
+            </p>
+          )}
         </div>
 
         <div>
