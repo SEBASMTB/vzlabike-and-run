@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `b0aeace`)  
+> Última actualización: 2026-11-25 (commit `8ad440b` — correo de rechazo)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -113,7 +113,7 @@
 - [x] **Gestión de inscripciones REDISEÑADA** (`1a6313b`):
   - **Pendientes por defecto** al entrar (bandeja de trabajo)
   - **Acciones masivas**: checkboxes → Aprobar (asigna dorsales correlativos por lote) / Rechazar con motivo / Deseleccionar
-  - **Rechazo con motivo obligatorio** (dialog; guarda `Registration.rejectReason` y **libera el dorsal**)
+  - **Rechazo con motivo obligatorio** (dialog; guarda `Registration.rejectReason`, **libera el dorsal** y **envía correo automático al corredor** con el motivo y los pasos para corregir/reportar su pago — `f9bb411`)
   - **Aprobar asigna dorsal + caja** al instante (toast con el dorsal asignado)
   - **Bandeja "Pagos sin Ficha"** (tab con contador): registrar en segundos transferencia/pago móvil del banco (evento, método, referencia, monto+moneda, titular, teléfono, banco, notas) — **no consumen dorsales**; filtros Sin conciliar/Conciliados/Ignorados/Todos; **aprobación de 1 clic** del conciliado (asigna dorsal+caja); marcar Ignorado/eliminar
   - **"Inscripción rápida en sitio / WhatsApp"** (botón ⚡): dialog mínimo (evento, nombre, cédula, categoría…) → nace APPROVED con **dorsal + caja al instante**; concilia por referencia si coincide
@@ -139,12 +139,15 @@
 - [x] **Estados únicos PENDING / APPROVED / REJECTED** (normalización automática de legacy `pending/confirmed/rejected` en el arranque de BD)
 - [x] **Modelo `PaymentRecord`** (Pagos sin Ficha) con estados UNMATCHED/MATCHED/IGNORED y `matchedRegistrationId`
 
-### 🔔 Notificaciones al corredor (nuevo — `b0aeace`)
+### 🔔 Notificaciones al corredor (`b0aeace` aprobar + `f9bb411` rechazar + `8ad440b` fiabilidad)
 - [x] **Correo automático al APROBAR** (`src/lib/email.ts` → `sendApprovalEmail`): se dispara al confirmar el pago (PATCH individual, aprobación masiva e inscripción rápida en sitio). HTML con **dorsal destacado**, **caja de retiro del kit**, **categoría** y datos del evento (fecha/lugar/distancia) + botón al evento. **Jamás bloquea la aprobación**: si falla o no hay API key, se registra y continúa. La respuesta admin incluye `emailSent/emailSentTo` y el toast del panel lo muestra
+- [x] **Correo automático al RECHAZAR** (`f9bb411` → `sendRejectionEmail`): se dispara en la **transición real** a REJECTED (no re-envía si ya estaba rechazada) por PATCH individual y rechazo masivo. HTML con **motivo del rechazo destacado** (escapado, obligatorio en /admin), pasos numerados para **corregir o volver a reportar el pago** (comprobante legible → WhatsApp → re-aprobación con dorsal/caja), tarjeta del evento y botones **WhatsApp** + detalles del evento. Jamás bloquea; sin corredor con email o sin API key → `emailSkipped` con motivo. Respuesta admin: `emailSent/emailSentTo/emailError`; el toast del panel muestra "· Correo enviado a X" o un aviso "Correo de rechazo no enviado"; el dialog de rechazo y el resumen masivo (emailsSent) lo informan
+- [x] **Fiabilidad `emailSent` (`8ad440b`)**: el SDK de Resend v6 **devuelve** el error (no lo lanza) — los 3 emisores (pre-registro, aprobación, rechazo) ahora revisan `error` de la respuesta, así `sent:true` SOLO cuando Resend aceptó el envío
 - [x] **Botón WhatsApp en /admin** (`src/lib/notify.ts` puro compartido): en cada fila APPROVED (icono verde), en el dialog de detalle (botón completo) y en el resultado de la inscripción rápida — abre `wa.me` con el mensaje ya armado (nombre, evento, fecha, lugar, categoría, **DORSAL** y **caja**). Normaliza teléfonos venezolanos (0412…/412…/+58 → 58412…). **Funciona SIN configuración**, listo desde ya
-- [x] **Consulta pública sin PII VERIFICADA en producción** (`GET /api/events/[slug]/mi-inscripcion`): devuelve SOLO `firstName/lastName, category, status, bibNumber, bibBoxLabel, shirtSize` — **nunca** email, teléfono, referencia de pago ni fecha de nacimiento (rate-limited 20/min por IP). E2E con assert en producción (`b0aeace`)
-- [x] **⚠️ CONFIGURACIÓN PENDIENTE DEL USUARIO (5 min) para activar el correo**: agregar en Vercel → Settings → Environment Variables: `RESEND_API_KEY` (resend.com, plan gratuito 100 correos/día) y opcionalmente `FROM_EMAIL` con un dominio verificado en Resend (por defecto usa `venezuelabikeandrun@gmail.com`, que requiere dominio verificado para enviar a cualquier destinatario). Sin la key TODO funciona; solo se saltan los correos (queda registrado en el log y en la respuesta como `emailSkipped`)
-- [x] Tests: `scripts/test-notify.ts` 22/22 (normalización VE, mensaje, URL); E2E producción `scripts/e2e-notificaciones-prod.sh` (inscripción con email → skip limpio, mi-inscripcion sin PII, PATCH con reporte de correo, limpieza)
+- [x] **Consulta pública sin PII VERIFICADA en producción** (`GET /api/events/[slug]/mi-inscripcion`): devuelve SOLO `firstName/lastName, category, status, bibNumber, bibBoxLabel, shirtSize` (+ `rejectReason` ÚNICAMENTE cuando está REJECTED — `f9bb411`, es el dato propio del corredor para que pueda corregir) — **nunca** email, teléfono, referencia de pago ni fecha de nacimiento (rate-limited 20/min por IP). E2E con assert en producción (`b0aeace` y `f9bb411`)
+- [x] **Widget "¿Ya te inscribiste?" muestra el motivo de rechazo** (`f9bb411`): tarjeta roja con el motivo + botón "Corregir / reportar por WhatsApp" (wa.me 584120162685)
+- [x] **⚠️ CONFIGURACIÓN PENDIENTE DEL USUARIO (5 min) para activar el correo (aprobación Y rechazo)**: agregar en Vercel → Settings → Environment Variables: `RESEND_API_KEY` (resend.com, plan gratuito 100 correos/día) y opcionalmente `FROM_EMAIL` con un dominio verificado en Resend (por defecto usa `venezuelabikeandrun@gmail.com`, que requiere dominio verificado para enviar a cualquier destinatario). Sin la key TODO funciona; solo se saltan los correos (queda registrado en el log y en la respuesta como `emailSkipped`). VERIFICADO en producción 2026-11-25: la key AÚN no está cargada → `emailSkipped: RESEND_API_KEY no configurada`
+- [x] Tests: `scripts/test-notify.ts` 22/22; E2E producción `scripts/e2e-notificaciones-prod.sh` (aprobación) y `scripts/e2e-rechazo-prod.sh` (`f9bb411`: rechazo PATCH con motivo → mi-inscripcion REJECTED+motivo sin PII + dorsal liberado → bulk con emailsSent → limpieza total)
 
 ### 🧹 Limpieza y seguridad (`71b6595`)
 - [x] Eliminado **código muerto con fuga PII**: `GET /api/registrations/lookup` (devolvía email/teléfono/DOB por cédula sin auth), `RegistrationDialog`, `GroupRegistrationDialog` (llamaban al endpoint roto `/api/register`), `/api/register`, `/api/register-group`, `/api/eligibility`
@@ -171,6 +174,8 @@
 ├── src/lib/bib-assignment.ts      # ⭐ Asignación atómica de dorsales (lote por categoría, reintentos)
 ├── src/lib/bib-lots.ts            # ⭐ Orden canónico Élite→Juvenil→edad + RESERVA_PRESENCIAL=10 (compartido panel/servidor)
 ├── src/lib/payment-accounts.ts    # ⭐ Cuentas de pago (tipos, parse, labels) + normalizePaymentRef + bibBoxLabel
+├── src/lib/email.ts               # ⭐ Correos Resend: pre-registro + aprobación + rechazo (motivo + cómo corregir)
+├── src/lib/notify.ts              # ⭐ WhatsApp: normalización teléfonos VE + mensaje de aprobación (wa.me)
 ├── src/lib/categories.ts          # Generadores de categorías + presets
 ├── src/middleware.ts              # Auth middleware /admin/*
 ├── src/app/
@@ -212,7 +217,7 @@
 
 - **Tablas:** Event (40 cols), Registration (35 cols), Runner, Category (8 cols), PaymentRecord (14 cols), Product, ProductOrder
 - **Eventos:** 9 totales (8 seed/demo + MISS restaurado)
-- **Inscripciones reales:** 2 (NATHALIE MORENO bib 3 y FUNDACION VENEZUELABIKE bib 2, ambos APPROVED, evento LA RUTA DE LA CAMPAÑA ADMIRABLE)
+- **Inscripciones reales:** 3 (FELIPI MORENO bib 616, NATHALIE MORENO bib 493, FUNDACION VENEZUELABIKE bib 575 — todas APPROVED, evento LA RUTA DE LA CAMPAÑA ADMIRABLE; verificado 2026-11-25)
 - **⚠️ Pendiente usuario:** re-subir la imagen del evento MISS desde el panel (perdida en el incidente 2026-11-10)
 
 ---
@@ -247,6 +252,16 @@
 | Endpoints PII cerrados (401/404) | ✅ |
 | Wizard / inscritos HTTP 200 | ✅ |
 
+### Producción — correo de rechazo (`scripts/e2e-rechazo-prod.sh`, 2026-11-25, `f9bb411`+`8ad440b`)
+| Prueba | Resultado |
+|--------|-----------|
+| PATCH REJECTED con motivo → REJECTED + motivo guardado + dorsal liberado | ✅ |
+| Respuesta admin con estado del correo (`emailSent`/`emailSkipped` + motivo del skip) | ✅ |
+| mi-inscripcion público → REJECTED + `rejectReason` visible + sin PII (claves verificadas) | ✅ |
+| Bulk reject → `ok:1, fail:0, emailsSent` reportado | ✅ |
+| Plantilla HTML de rechazo renderiza sin errores + error real de Resend reportado (test con key falsa → `sent:false, "validation_error: API key is invalid"`) | ✅ |
+| Cleanup: 2 inscripciones de prueba eliminadas; quedan las 3 reales (616/493/575) | ✅ |
+
 ---
 
 ## ⚠️ ERRORES PENDIENTES / ISSUES CONOCIDOS
@@ -258,13 +273,20 @@
 | 20 | PUT/DELETE admin usan interpolación de strings con escape `''` (libSQL no soporta params) | ⚠️ Aceptable | Refactorizar a params si el adaptador los soporta |
 | 21 | **Descuento de cupos** reportado por el usuario (2 inscritos no descontaban cupos) | ✅ **Resuelto en `0b1b979`** | Era el conteo congelado de cupos; verificado en producción: "498 de 500" con 2 inscritos |
 | 22 | Lag de réplica Turso: un check de conciliación E2E falló por lectura momentáneamente desactualizada | ⚠️ Informativo | El matching funciona (verificado en BD); no requiere acción |
-| 23 | Correo al aprobar/rechazar inscripciones | 🔜 Futuro | Fase 2 restante (Resend ya está en el stack para el email de preregistro) |
+| 23 | Correo al aprobar/rechazar inscripciones | ✅ **Resuelto en `b0aeace` + `f9bb411`** | Falta SOLO la acción del usuario: cargar `RESEND_API_KEY` en Vercel (ver ⚠️ en Notificaciones) |
 
 ---
 
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+8ad440b fix(email): reportar el error real de Resend (SDK v6 devuelve error, no lanza) - emailSent ahora es fiable en los 3 correos
+f9bb411 feat(rechazo): correo automatico al rechazar (motivo obligatorio + pasos para corregir o reportar pago de nuevo)
+3cbb3b0 docs: estado y session-resume actualizados a b0aeace (notificaciones al aprobar: correo + whatsapp + PII verificado)
+b0aeace feat(notificaciones): correo automatico al aprobar (dorsal+caja+evento via Resend) + boton WhatsApp en el panel + verificacion consulta publica sin PII
+3410b9e docs: estado y session-resume actualizados al fix de dorsales 75eb592
+75eb592 fix(dorsales): orden canonico Elite->Juvenil->menor a mayor edad, margen de 10 por categoria para el sabado, sin fallback global (Master C jamas recibe el #1) + bulk categories con upsert que preserva IDs de inscripciones + PUT categoria soporta lote
+040a3ea docs: regla de oro del usuario - SIEMPRE entregar direcciones de acceso (URLs) + tabla completa de URLs en PROYECTO-ESTADO
 cb25c17 fix(admin): filtro status=todos en bandeja de pagos sin ficha
 467052e fix(api): serializacion BigInt segura en listado de eventos (COUNT del adaptador libSQL)
 71b6595 feat(publico): consulta de dorsal y caja para el corredor, caja en la lista publica y limpieza de codigo muerto con fuga PII
@@ -311,7 +333,13 @@ faf9474 feat(diseno): tipografia Figtree estilo Active Network
 
 ### 4. Verificar con el usuario si restaurar CAMPAÑA ADMIRABLE y LA CULATA (borradas durante pruebas del usuario)
 
-### 5. Fase 2 restante (opcional): email automático al aprobar/rechar con Resend
+### 5. ~~Fase 2 restante (opcional): email automático al aprobar/rechar con Resend~~ ✅ **HECHO (`b0aeace` aprobar + `f9bb411` rechazar + `8ad440b` fiabilidad; verificado en producción)**
+
+### 6. (USUARIO, 5 min) Activar el correo en Vercel
+- Vercel → Settings → Environment Variables → `RESEND_API_KEY` (resend.com, gratis 100/día) + opcional `FROM_EMAIL` con dominio verificado en Resend. Sin tocar código: al guardar, Vercel redespliega y los correos de **aprobación y rechazo** empiezan a salir solos
+
+### 7. Los otros 7 eventos de prueba NO se tocan
+- Decisión del organizador (2026-11-25): son eventos de prueba que se eliminarán/reemplazarán con el calendario real de carreras — **no aplicarles lotes ni migraciones**
 
 ---
 

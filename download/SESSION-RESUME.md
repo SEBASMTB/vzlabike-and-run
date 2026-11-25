@@ -14,7 +14,7 @@ Estoy trabajando en el proyecto VzlaBike and Run, una plataforma de cronometraje
 - Deploy Vercel: https://vzlabike-and-run.vercel.app
 - Admin: https://vzlabike-and-run.vercel.app/admin/login (pass: vzlabike2024)
 - Base de datos: Turso (libsql://vzlabikeandrun-vbrresult.aws-us-west-2.turso.io)
-- Última sesión cerrada: 2026-11-25, HEAD = b0aeace
+- Última sesión cerrada: 2026-11-25, HEAD = 8ad440b
 - Guía de staging: download/STAGING-SETUP.md (subdominio + Turso separada, aún sin crear)
 
 == ARCHIVO DE ESTADO COMPLETO ==
@@ -104,7 +104,46 @@ El usuario dio luz verde al rediseño completo y se implementó TODO en 8 commit
   inscritos 200. NOTA: un check de conciliación falló por lag de réplica Turso (lectura
   desactualizada un instante); el matching funciona — informativo, no requiere acción.
 
-== LO ÚLTIMO QUE SE HIZO (2026-11-25, NOTIFICACIONES `b0aeace`) ==
+== LO ÚLTIMO QUE SE HIZO (2026-11-25, CORREO DE RECHAZO `f9bb411` + `8ad440b`) ==
+
+Instrucciones del usuario: (1) NO aplicar lotes a los otros 7 eventos (son de prueba, los
+borrará al armar el calendario real); (2) SÍ implementar el correo automático al RECHAZAR
+con motivo obligatorio y mensaje claro para corregir/re-reportar pago; (3) commit+push+docs.
+Implementado y VERIFICADO EN PRODUCCIÓN:
+
+1. `src/lib/email.ts` → `sendRejectionEmail()`: HTML con el MOTIVO DEL RECHAZO destacado
+   (escapado con &amp;/&lt;/&gt;/&quot;), pasos numerados (1 revisar motivo, 2 re-reportar pago
+   por WhatsApp con comprobante legible, 3 re-aprobación enviará dorsal+caja, 4 consultar
+   estado con cédula), tarjeta del evento y botones WhatsApp (584120162685) + detalles del
+   evento. Nunca lanza: sin email válido o sin RESEND_API_KEY → {sent:false, skipped:true,
+   error}.
+2. PATCH `/api/admin/registrations/[id]` → `notifyRejection()`: se dispara SOLO en la
+   transición real a REJECTED (si ya estaba rechazada NO re-envía). Respuesta:
+   emailSent/emailSentTo/emailSkipped/emailError. Bulk `action:reject` → correo por cada
+   una (solo transiciones nuevas) + `emailsSent` en la respuesta.
+3. Panel `/admin/inscripciones`: toast "· Correo enviado a X" al rechazar; si no se pudo
+   enviar → toast "Correo de rechazo no enviado" con el motivo y sugerencia WhatsApp;
+   dialog de rechazo avisa que el corredor recibirá el correo; resumen masivo muestra
+   "N correo(s) enviado(s)".
+4. PÚBLICO: `mi-inscripcion` ahora devuelve `rejectReason` SOLO cuando status=REJECTED
+   (dato propio del corredor, sin PII de contacto); `BibLookupWidget` muestra tarjeta roja
+   con el motivo + botón "Corregir / reportar por WhatsApp".
+5. FIX FIABILIDAD (`8ad440b`): el SDK Resend v6 DEVUELVE el error (no lanza) — los 3
+   emisores ahora revisan `error` de la respuesta. Probado con key falsa: antes decía
+   sent:true, ahora {sent:false, error:"validation_error: API key is invalid"}.
+6. E2E PRODUCCIÓN `scripts/e2e-rechazo-prod.sh` (2 corridas, ambas OK): quick-register con
+   email → PATCH REJECTED con motivo → REJECTED+motivo+dorsal liberado; mi-inscripcion
+   pública → REJECTED + rejectReason visible + claves exactas sin PII; bulk → ok:1 fail:0
+   emailsSent; cleanup total (quedan SOLO las 3 reales: FELIPI 616, NATHALIE 493,
+   FUNDACION 575).
+
+⚠️ PARA QUE LOS CORREOS (aprobación Y rechazo) SALGAN DE VERDAD — acción del usuario,
+AÚN PENDIENTE en Vercel: Settings → Environment Variables → `RESEND_API_KEY`
+(resend.com, gratis 100/día) + opcional `FROM_EMAIL` con dominio verificado en Resend
+(por defecto usa venezuelabikeandrun@gmail.com). Sin la key todo funciona, solo se
+saltan los correos (emailSkipped). WhatsApp funciona desde ya sin configurar nada.
+
+== SECCIÓN ANTERIOR (2026-11-25, NOTIFICACIONES `b0aeace`) ==
 
 Pregunta del usuario: "¿cómo le llega el dorsal/caja al corredor si no entra al sitio?".
 Implementado en 1 commit (`b0aeace`, verificado en producción):
@@ -176,8 +215,8 @@ CORRECCIÓN (commit `75eb592`, verificado en producción):
    configurarlos explícitos para verlos/editarlos en el panel.
 
 == SIGUIENTE PASO ==
-1. (USUARIO, 5 min) Añadir RESEND_API_KEY + FROM_EMAIL en Vercel para activar el correo de aprobación (ver sección NOTIFICACIONES).
-2. (Opcional) Correo al RECHAZAR con el motivo (fase que falta).
+1. (USUARIO, 5 min) Añadir RESEND_API_KEY + FROM_EMAIL en Vercel para activar los correos de aprobación Y rechazo (ver sección CORREO DE RECHAZO). Única acción pendiente del sistema de notificaciones.
+2. (Decisión tomada 2026-11-25) Los otros 7 eventos NO se tocan: son de prueba, el usuario los borrará/reemplazará con el calendario real. NO aplicarles lotes ni migraciones.
 3. (Opcional) Crear staging con download/STAGING-SETUP.md.
 4. Re-subir imagen del evento MISS desde el panel (incidente 2026-11-10).
 5. Verificar con el usuario si restaurar CAMPAÑA ADMIRABLE y LA CULATA (borradas en
