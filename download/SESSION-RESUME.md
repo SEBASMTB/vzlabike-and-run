@@ -25,9 +25,13 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-**FIX CRÍTICO del flujo de inscripción** (commit `260114f`, deployado y VERIFICADO EN PRODUCCIÓN):
+**MEJORAS DEL PANEL ADMIN** (commits `1b48d5a` + `257e4da`, deployados y verificados en producción 2026-11-25):
 
-Reporte del usuario: (1) creó evento con fecha 14/02/2027 y la inscripción mostraba 13 de febrero; (2) al marcar la fecha de nacimiento no se asignaba categoría y el paso 3 no dejaba avanzar ("Este evento no tiene categorías definidas"); (3) pidió diseñar hacia trabajo consistente con base de datos.
+- **Eliminar inscripciones**: nuevo `DELETE /api/admin/registrations/[id]` con `requireAuth` (404 si no existe) + botón papelera en cada fila del panel (`/admin/inscripciones`) con AlertDialog de confirmación. Se usó para borrar en producción la inscripción de prueba PRUEBA VERIFICACION-VBR (cédula 99000001) — HTTP 200, verificado.
+- **Listado admin normalizado**: la API (`GET /api/admin/registrations`) ahora devuelve objetos `category`, `event` y `runner` (sintetizado desde los campos planos/legacy + snapshot ciudad/estado/emergencia/club). Antes las columnas Categoría y Evento mostraban "—".
+- **Búsqueda por dorsal**: el buscador del panel ahora también filtra por `bibNumber` (`CAST(bibNumber AS TEXT) LIKE`), como lo prometía el placeholder.
+
+Reporte del usuario: (1) creó evento con fecha 14/02/2027 y la inscripción mostraba 13 de febrero; (2) al marcar la fecha de nacimiento no se asignaba categoría y el paso 3 no dejaba avanzar ("Este evento no tiene categorías definidas"); (3) pidió diseñar hacia trabajo consistente con base de datos. → RESUELTO en `1fde98d`/`260114f` (ver abajo). El usuario confirmó con captura: inscripción de NATHALIE MORENO registrada E2E con éxito (Máster B Femenino 40+, $65 / Bs. 9.457,50, PENDIENTE).
 
 Causas raíz encontradas y corregidas:
 - **Fecha off-by-one**: se guardaba medianoche UTC y se mostraba con zona local (UTC-4). Ahora: `src/lib/date-utils.ts` formatea SIEMPRE en UTC y date-only se guarda al mediodía UTC (POST/PUT eventos). Barrido UTC en ~12 archivos (EventCard, wizard, OrderSummary, waiver, emails, admin…).
@@ -47,9 +51,9 @@ Causas raíz encontradas y corregidas:
 **VERIFICACIÓN EN PRODUCCIÓN (2026-11-25)**: evento `la-ruta-de-la-campana-admirable` → header "domingo, 14 de febrero de 2027"; 16 categorías desde BD (`source: db`); wizard paso 3 con "Tu edad: 57 años", 8 elegibles y **Máster C Masculino (50-59) auto-asignada**; POST de prueba HTTP 201 con `runnerId`+`categoryId`+montos persistidos; fecha futura → 400. ⚠️ Quedó 1 inscripción de prueba en producción (PRUEBA VERIFICACION-VBR, cédula 99000001, bib 1) — borrarla desde el panel admin.
 
 == SIGUIENTE PASO ==
-1. ~~Verificar en producción la inscripción de "LA RUTA DE LA CAMPAÑA ADMIRABLE"~~ ✅ VERIFICADO (ver arriba). **Pendiente menor:** borrar la inscripción de prueba (cédula 99000001) desde el panel admin
+1. ~~Borrar la inscripción de prueba (cédula 99000001)~~ ✅ ELIMINADA en producción (2026-11-25, vía el nuevo DELETE). Quedan 2 inscripciones reales (NATHALIE MORENO bib 3 y FUNDACION VENEZUELABIKE bib 2, ambas PENDING) — decidir si la 2a era prueba y borrarla desde el panel
 2. Feedback pendiente de la sección Monitor Live (`1b9a1e4`)
-3. Rediseño del flujo de inscripción/pagos (fases 2 y 4 restantes, esperando OK del usuario; persistencia y categorías ya hechas)
+3. Rediseño del flujo de inscripción/pagos (fases 2 y 4 restantes, esperando OK del usuario; persistencia, categorías y eliminación en panel ya hechas)
 4. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
 
 == PROTOCOLO DE TRABAJO ==

@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `260114f`)  
+> Última actualización: 2026-11-25 (commits `1b48d5a` + `257e4da`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -161,6 +161,8 @@
 | 7 | ~~Fecha del evento desplazada un día (14/02 mostraba 13/02)~~ | ✅ **Resuelto** (commit `1fde98d`) | `src/lib/date-utils.ts`: formateo SIEMPRE UTC; date-only se guarda al mediodía UTC en POST/PUT; barrido UTC en ~12 archivos |
 | 8 | ~~Wizard no asigna categoría por fecha de nacimiento~~ | ✅ **Resuelto** (commit `1fde98d`) | Auto-asignación por edad+género con badge "Asignada" (editable). Eventos sin categorías definidas reciben las estándar del deporte |
 | 11 | ~~Fecha de nacimiento absurda (p. ej. año 2027 → edad "-1 años") sin aviso en vivo~~ | ✅ **Resuelto** (commit `260114f`) | Error bajo "Edad calculada" al instante (futura, <5, >100), borde rojo, `max=hoy` en el input; validación server-side espejo (400) |
+| 12 | ~~Panel admin sin poder eliminar inscripciones (la prueba quedaba pegada para siempre)~~ | ✅ **Resuelto** (commit `1b48d5a`) | `DELETE /api/admin/registrations/[id]` con auth (404 si no existe) + botón papelera en el panel con AlertDialog de confirmación. Verificado en producción: borró la inscripción de prueba 99000001 (HTTP 200) |
+| 13 | ~~Listado admin mostraba "—" en Categoría y Evento (API plana vs UI objetos) y búsqueda por dorsal no existía~~ | ✅ **Resuelto** (commit `257e4da`) | La API normaliza cada fila a objetos `category`/`event`/`runner` (runner sintetizado desde campos planos + snapshot ciudad/estado/emergencia); búsqueda incluye `CAST(bibNumber AS TEXT)`. Verificado en producción |
 | 9 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
 | 10 | PUT/DELETE admin usan interpolación de strings con escape `''` (commits `5491ae8`/`06dc196` — libSQL no soporta params) | ⚠️ Aceptable | SQLite escapa comillas dobladas y las columnas van con allowlist. Refactorizar a params si el adaptador llega a soportarlos |
 
@@ -197,6 +199,8 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+257e4da fix(admin): listado inscripciones devuelve objetos category/event/runner + busqueda por dorsal
+1b48d5a feat(admin): eliminar inscripciones - endpoint DELETE con auth + boton con confirmacion en el panel
 260114f fix: validacion en vivo de fecha de nacimiento + persistencia completa de inscripcion en BD
 954f638 docs: estado y session-resume actualizados a 1fde98d (fix flujo inscripcion verificado en produccion)
 1fde98d fix: flujo de inscripcion funcional - fecha UTC, categorias desde BD y esquema Prisma alineado
@@ -225,7 +229,9 @@ bf33f93 config: Activar Turso como base de datos de produccion
 
 ## 🚀 SIGUIENTE PASO INMEDIATO
 
-### 0. ~~Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE"~~ ✅ **VERIFICADO (2026-11-25, `260114f`)**: fecha muestra "domingo, 14 de febrero de 2027"; 16 categorías desde BD; auto-asignación Máster C (50-59) para 57 años/M; error en vivo para fechas imposibles; POST real HTTP 201 con `runnerId`+`categoryId`+montos+BCV persistidos; fecha futura rechazada con 400. **Nota:** queda 1 inscripción de prueba (PRUEBA VERIFICACION-VBR, cédula 99000001) borable desde el panel admin
+### 0. ~~Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE"~~ ✅ **VERIFICADO (2026-11-25, `260114f`)**: fecha muestra "domingo, 14 de febrero de 2027"; 16 categorías desde BD; auto-asignación Máster C (50-59) para 57 años/M; error en vivo para fechas imposibles; POST real HTTP 201 con `runnerId`+`categoryId`+montos+BCV persistidos; fecha futura rechazada con 400.
+
+### 0.0b ~~Borrar inscripción de prueba (cédula 99000001)~~ ✅ **HECHO (2026-11-25, `1b48d5a`)**: eliminada en producción vía el nuevo endpoint DELETE (HTTP 200). **Nota:** quedan 2 inscripciones reales: NATHALIE MORENO (bib 3, Máster B Femenino 40+, pending, con comprobante) y FUNDACION VENEZUELABIKE (bib 2, Máster C Masculino 50-59, pending) — borrar esta última desde el panel solo si era de prueba.
 
 ### 0.1 Continuar con el rediseño del flujo de inscripciones/pagos (fases 1-2 y 4 restantes — esperar OK del usuario; Fase 3 ya resuelta en `1fde98d`)
 
