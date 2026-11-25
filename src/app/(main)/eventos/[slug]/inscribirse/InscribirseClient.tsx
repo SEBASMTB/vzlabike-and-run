@@ -118,6 +118,8 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
     shirtPrice: event.shirtPrice,
     sportType: event.sportType,
     location: event.location,
+    // Cuentas de destino de pago configurables (se muestran solo en el Paso 3)
+    paymentAccounts: event.paymentAccounts,
   };
 
   const catList = categories.map((c: any) => ({

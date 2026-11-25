@@ -94,6 +94,8 @@ export async function PUT(
       categoryInterval: "categoryInterval",
       hasShirt: "hasShirt",
       requiresFederationLicense: "requiresFederationLicense",
+      paymentAccounts: "paymentAccounts",
+      bibBoxSize: "bibBoxSize",
     };
 
     for (const [key, col] of Object.entries(fieldMap)) {

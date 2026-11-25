@@ -3,6 +3,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sendPreRegistrationEmail } from "@/lib/email";
 import { calculateAge, parseEventCategories, validateMTBCategory, validateGenericCategory, getCategoriesForSport, parseDateDDMMYYYY, type CategoryOption } from "@/lib/categories";
 import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
+import { normalizePaymentRef } from "@/lib/payment-accounts";
 
 /**
  * POST /api/events/[slug]/register
@@ -11,8 +12,15 @@ import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
  *   1. Valida y normaliza la fecha de nacimiento (DD/MM/YYYY o ISO).
  *   2. Upsert del Runner por cédula (registro único del atleta).
  *   3. Crea la Registration vinculada a Event + Runner + Category
- *      (cuando la categoría existe en BD) con snapshot completo:
- *      ubicación, contacto de emergencia, montos USD/Bs y tasa BCV.
+ *      con snapshot completo: ubicación, contacto de emergencia,
+ *      montos USD/Bs y tasa BCV congelados.
+ *   4. El DORSAL NO se asigna aquí — se asigna de forma atómica al
+ *      APROBAR la inscripción (primer número libre del lote de su
+ *      categoría), para no quemar dorsales en PENDING/REJECTED.
+ *   5. La referencia de pago debe ser única por evento.
+ *   6. Si la referencia coincide con un pago sin ficha del evento
+ *      (bandeja de conciliación), lo marca MATCHED para aprobación
+ *      de un clic en /admin.
  */
 
 export async function POST(
@@ -156,6 +164,26 @@ export async function POST(
       );
     }
 
+    // ── Referencia de pago única por evento ──
+    // Cada inscripción exige su propio número de referencia; si alguien
+    // reutiliza una referencia ya registrada en este evento se rechaza.
+    const refNorm = normalizePaymentRef(paymentRef || "");
+    if (refNorm) {
+      const regs = await db.registration.findMany({
+        where: { eventId: event.id },
+        select: { paymentRef: true },
+      });
+      const dup = regs.find(
+        (r) => r.paymentRef && normalizePaymentRef(r.paymentRef) === refNorm
+      );
+      if (dup) {
+        return NextResponse.json(
+          { error: "Esta referencia de pago ya fue registrada en este evento. Cada inscripción debe tener su propia referencia." },
+          { status: 400 }
+        );
+      }
+    }
+
     // MTB category validation (always validate for MTB events)
     // - Categorías legacy JSON → reglas MTB (Élite, 100 Kilos, Recreativo)
     // - Categorías en BD o estándar del deporte → validación genérica edad/género
@@ -270,8 +298,8 @@ export async function POST(
       console.error("[API register] Runner upsert omitido:", runnerErr);
     }
 
-    // Generate bib number
-    const bibNumber = regCount + 1;
+    // ── Dorsal: NO se asigna aquí (se asigna al APROBAR, dentro del lote
+    // bibStart–bibEnd de la categoría). Pendiente/Rechazado no queman números.
 
     const registration = await db.registration.create({
       data: {
@@ -296,7 +324,7 @@ export async function POST(
         emergRelation: emergRelation || "",
         emergencyContact: emergencyContact || "",
         emergencyPhone: emergencyPhone || "",
-        // Montos y tasa del momento del pago
+        // Montos y tasa del momento del pago (congelados)
         totalAmount: typeof totalAmount === "number" ? totalAmount : 0,
         totalAmountBs: typeof totalBs === "number" ? totalBs : 0,
         bcvRate: typeof bcvRate === "number" ? bcvRate : 0,
@@ -305,11 +333,39 @@ export async function POST(
         paymentProofUrl: paymentProof || null,
         registrationType: registrationType === "other" ? "other" : "self",
         waiverAccepted: waiverAccepted || false,
-        status: "pending",
-        bibNumber,
+        // Taxonomía única de estados: PENDING | APPROVED | REJECTED
+        status: "PENDING",
+        bibNumber: null,
         categoryId,
       },
     });
+
+    // ── Conciliación automática de pagos sin ficha ──
+    // Si la referencia coincide con un pago anotado en la bandeja
+    // "Pagos sin Ficha" del mismo evento, se marca MATCHED y queda listo
+    // para aprobar con un clic (dorsal + caja) en /admin.
+    try {
+      if (refNorm) {
+        const records = await db.paymentRecord.findMany({
+          where: { eventId: event.id, status: "UNMATCHED" },
+        });
+        const matched = records.find(
+          (r) => normalizePaymentRef(r.reference) === refNorm
+        );
+        if (matched) {
+          await db.paymentRecord.update({
+            where: { id: matched.id },
+            data: {
+              status: "MATCHED",
+              matchedRegistrationId: registration.id,
+              matchedAt: new Date(),
+            },
+          });
+        }
+      }
+    } catch (matchErr) {
+      console.error("[API register] Conciliación omitida:", matchErr);
+    }
 
     // Send confirmation email (non-blocking)
     sendPreRegistrationEmail({

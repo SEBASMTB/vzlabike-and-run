@@ -189,4 +189,12 @@ export const METODOS_PAGO: MetodoPago[] = [
     requiereReferencia: true,
     requiereComprobante: false,
   },
+  {
+    id: "binance",
+    label: "Binance (USDT)",
+    descripcion: "Transferencia cripto vía Binance Pay en USDT",
+    moneda: "USD",
+    requiereReferencia: true,
+    requiereComprobante: false,
+  },
 ];

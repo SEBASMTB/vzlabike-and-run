@@ -31,6 +31,12 @@ import {
   METODOS_PAGO,
   type MetodoPago,
 } from "@/lib/venezuela-data";
+import {
+  accountLabel,
+  accountLines,
+  parsePaymentAccounts,
+  type PaymentAccount,
+} from "@/lib/payment-accounts";
 import { useToast } from "@/hooks/use-toast";
 import { formatEventDateLong } from "@/lib/date-utils";
 import { OrderSummary } from "./OrderSummary";
@@ -53,7 +59,6 @@ import {
   Smartphone,
   Wallet,
   Banknote,
-  TrendingUp,
   Hash,
   Building2,
   ShieldCheck,
@@ -65,6 +70,9 @@ import {
   Mail,
   Printer,
   UserCheck,
+  KeyRound,
+  Landmark,
+  Coins,
   type LucideIcon,
 } from "lucide-react";
 
@@ -83,6 +91,8 @@ interface RegEvent {
   shirtPrice: number | null;
   sportType: string;
   location: string;
+  /** JSON string de cuentas de destino de pago (Pago Móvil, Zelle, Binance…) */
+  paymentAccounts?: string | PaymentAccount[];
 }
 
 interface RegCategory {
@@ -144,11 +154,11 @@ interface RegistrationWizardProps {
 // Constants
 // ============================================================
 
+/** Flujo Hipereventos: 3 pasos claros y secuenciales */
 const STEPS: { id: number; label: string; shortLabel: string; icon: LucideIcon }[] = [
-  { id: 1, label: "Perfil del Participante", shortLabel: "Perfil", icon: User },
-  { id: 2, label: "Datos Geográficos y Contacto", shortLabel: "Geografía", icon: MapPin },
-  { id: 3, label: "Club y Categoría", shortLabel: "Club", icon: Users },
-  { id: 4, label: "Kit y Pago", shortLabel: "Kit y Pago", icon: CreditCard },
+  { id: 1, label: "Datos del Corredor", shortLabel: "Datos", icon: User },
+  { id: 2, label: "Categoría y Talla", shortLabel: "Categoría", icon: Trophy },
+  { id: 3, label: "Pago", shortLabel: "Pago", icon: CreditCard },
 ];
 
 const TOTAL_STEPS = STEPS.length;
@@ -163,6 +173,7 @@ const PAYMENT_ICONS: Record<string, LucideIcon> = {
   movil: Smartphone,
   divisas: DollarSign,
   zelle: Wallet,
+  binance: Coins,
 };
 
 const EMPTY_FORM: RegFormData = {
@@ -191,7 +202,6 @@ const EMPTY_FORM: RegFormData = {
 /** Comprobante completo que muestra la pantalla de éxito */
 interface ReceiptData {
   registrationId?: string;
-  bibNumber?: number | null;
   categoryName: string;
   categoryPrice: number;
   shirtSize: string;
@@ -347,7 +357,14 @@ export function RegistrationWizard({
 
   const { toast } = useToast();
 
-  // Fetch BCV rate on mount
+  // Cuentas de destino de pago configuradas por el organizador (Paso 3)
+  const paymentAccounts = useMemo<PaymentAccount[]>(
+    () => parsePaymentAccounts(event.paymentAccounts),
+    [event.paymentAccounts]
+  );
+
+  // Fetch BCV rate on mount — se obtiene UNA sola vez: el monto y la tasa
+  // quedan congelados para toda la inscripción (Paso 3 los muestra fijos).
   useEffect(() => {
     let cancelled = false;
     (async () => {
@@ -479,6 +496,15 @@ export function RegistrationWizard({
   const selectedPaymentMethod: MetodoPago | null =
     METODOS_PAGO.find((m) => m.id === formData.paymentMethod) || null;
 
+  // Cuentas que coinciden con el método seleccionado (o todas si aún no elige)
+  const visibleAccounts = useMemo(() => {
+    if (!selectedPaymentMethod) return paymentAccounts;
+    const matches = paymentAccounts.filter(
+      (a) => a.method === selectedPaymentMethod.id
+    );
+    return matches.length > 0 ? matches : paymentAccounts;
+  }, [paymentAccounts, selectedPaymentMethod]);
+
   // Pre-compute suggested categories (age + gender match)
   const eligibleCategories = useMemo(() => {
     if (calculatedAge === null) return categories;
@@ -531,6 +557,7 @@ export function RegistrationWizard({
     const digitsOnly = (s: string) => s.replace(/\D/g, "");
 
     if (step === 1) {
+      // Datos del corredor: identidad + contacto + ubicación + emergencia
       if (!formData.cedula.trim()) newErrors.cedula = "Cédula requerida";
       else if (formData.cedula.trim().length < 5) newErrors.cedula = "Mínimo 5 caracteres";
       if (!formData.nombres.trim()) newErrors.nombres = "Nombres requeridos";
@@ -538,14 +565,12 @@ export function RegistrationWizard({
       if (!formData.fechaNacimiento)
         newErrors.fechaNacimiento = "Fecha de nacimiento requerida";
       else if (birthDateIssue) newErrors.fechaNacimiento = birthDateIssue;
+      if (!formData.genero) newErrors.genero = "Selecciona el género";
       if (!formData.email.trim()) newErrors.email = "Correo requerido";
       else if (!emailRegex.test(formData.email)) newErrors.email = "Correo inválido";
       if (!formData.telefono.trim()) newErrors.telefono = "Teléfono requerido";
       else if (digitsOnly(formData.telefono).length < 7)
         newErrors.telefono = "Mínimo 7 dígitos";
-    }
-
-    if (step === 2) {
       if (!formData.estado) newErrors.estado = "Selecciona un estado";
       if (!formData.ciudad.trim()) newErrors.ciudad = "Ciudad requerida";
       if (!formData.emergName.trim()) newErrors.emergName = "Nombre del contacto requerido";
@@ -555,7 +580,7 @@ export function RegistrationWizard({
       if (!formData.emergRelation) newErrors.emergRelation = "Parentesco requerido";
     }
 
-    if (step === 3) {
+    if (step === 2) {
       if (!formData.club) newErrors.club = "Selecciona una opción";
       if (
         formData.club === CLUB_OPCIONES_ESPECIALES[0] &&
@@ -565,11 +590,11 @@ export function RegistrationWizard({
       if (!formData.categoryId)
         newErrors.categoryId =
           "No se pudo asignar una categoría automáticamente — verifica tu fecha de nacimiento y género";
-    }
-
-    if (step === 4) {
       if (showShirtSection && !formData.shirtSize)
         newErrors.shirtSize = "Selecciona una talla";
+    }
+
+    if (step === 3) {
       if (!formData.paymentMethod) newErrors.paymentMethod = "Selecciona un método";
       if (
         selectedPaymentMethod?.requiereReferencia &&
@@ -618,7 +643,7 @@ export function RegistrationWizard({
   // ─── Submit ────────────────────────────────────────────────
 
   const handleSubmit = async () => {
-    if (!validateStep(4)) {
+    if (!validateStep(3)) {
       toast({
         title: "Datos incompletos",
         description: "Completa todos los campos requeridos del paso final.",
@@ -695,14 +720,9 @@ export function RegistrationWizard({
           (result as Record<string, unknown>).id ||
           (result as Record<string, unknown>).registrationId
         )) || undefined;
-      const regBib =
-        (result && typeof result === "object"
-          ? (result as Record<string, unknown>).bibNumber
-          : undefined) || null;
 
       setSuccessData({
         registrationId: regId ? String(regId) : undefined,
-        bibNumber: typeof regBib === "number" ? regBib : null,
         categoryName: selectedCategory?.name || "",
         categoryPrice: selectedCategory?.price ?? event.price,
         shirtSize: showShirtSection ? formData.shirtSize : "",
@@ -898,14 +918,15 @@ export function RegistrationWizard({
                       </Badge>
                     </div>
                   )}
-                  {successData.bibNumber != null && (
-                    <div className="flex justify-between gap-3 text-sm">
-                      <span className="shrink-0 text-gray-500">Dorsal provisional</span>
-                      <span className="font-mono font-bold text-gray-900">
-                        #{successData.bibNumber}
-                      </span>
-                    </div>
-                  )}
+                  <div className="flex items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2.5 text-sm">
+                    <span className="flex items-center gap-1.5 text-blue-800">
+                      <KeyRound className="size-4 shrink-0" />
+                      Dorsal y caja de retiro
+                    </span>
+                    <span className="text-right text-xs font-medium leading-snug text-blue-700">
+                      Se asignan automáticamente al aprobar tu pago
+                    </span>
+                  </div>
                 </div>
               </div>
 
@@ -1104,28 +1125,28 @@ export function RegistrationWizard({
                         handleRegistrationTypeChange,
                       })}
                     {currentStep === 2 &&
-                      renderStep2({ formData, errors, update })}
-                    {currentStep === 3 &&
-                      renderStep3({
+                      renderStep2({
                         formData,
                         errors,
                         update,
                         selectedCategory,
                         calculatedAge,
+                        showShirtSection,
+                        event,
                       })}
-                    {currentStep === 4 &&
-                      renderStep4({
+                    {currentStep === 3 &&
+                      renderStep3({
                         formData,
                         errors,
                         update,
                         event,
-                        showShirtSection,
                         bcvRate,
                         bcvSource,
                         rateLoading,
                         totalUSD,
                         totalBs,
                         selectedPaymentMethod,
+                        visibleAccounts,
                         waiverAccepted,
                         setWaiverAccepted,
                       })}
@@ -1295,7 +1316,7 @@ function RequiredMark() {
 }
 
 // ============================================================
-// Step 1: Perfil del Participante
+// Paso 1: Datos del Corredor (identidad + contacto + ubicación + emergencia)
 // ============================================================
 
 interface Step1Props {
@@ -1542,26 +1563,7 @@ function renderStep1({
           />
           <FieldError message={errors.telefono} />
         </div>
-      </div>
-    </div>
-  );
-}
 
-// ============================================================
-// Step 2: Datos Geográficos y Contacto
-// ============================================================
-
-interface Step2Props {
-  formData: RegFormData;
-  errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
-  update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
-}
-
-function renderStep2({ formData, errors, update }: Step2Props) {
-  return (
-    <div className="space-y-6">
-      {/* Location */}
-      <div className="grid gap-4 sm:grid-cols-2">
         <div>
           <Label htmlFor="estado" className="mb-1.5 block">
             <MapPin className="size-3.5" /> Estado
@@ -1685,24 +1687,28 @@ function renderStep2({ formData, errors, update }: Step2Props) {
 }
 
 // ============================================================
-// Step 3: Club y Categoría
+// Paso 2: Categoría y Talla (club + categoría automática + franela)
 // ============================================================
 
-interface Step3Props {
+interface Step2Props {
   formData: RegFormData;
   errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
   update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
   selectedCategory: RegCategory | null;
   calculatedAge: number | null;
+  showShirtSection: boolean;
+  event: RegEvent;
 }
 
-function renderStep3({
+function renderStep2({
   formData,
   errors,
   update,
   selectedCategory,
   calculatedAge,
-}: Step3Props) {
+  showShirtSection,
+  event,
+}: Step2Props) {
   const showClubOtro = formData.club === CLUB_OPCIONES_ESPECIALES[0];
 
   return (
@@ -1866,48 +1872,10 @@ function renderStep3({
         )}
         <FieldError message={errors.categoryId} />
       </div>
-    </div>
-  );
-}
 
-// ============================================================
-// Step 4: Kit y Pago
-// ============================================================
+      <Separator />
 
-interface Step4Props {
-  formData: RegFormData;
-  errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
-  update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
-  event: RegEvent;
-  showShirtSection: boolean;
-  bcvRate: number | null;
-  bcvSource: string | null;
-  rateLoading: boolean;
-  totalUSD: number;
-  totalBs: number | null;
-  selectedPaymentMethod: MetodoPago | null;
-  waiverAccepted: boolean;
-  setWaiverAccepted: (v: boolean) => void;
-}
-
-function renderStep4({
-  formData,
-  errors,
-  update,
-  event,
-  showShirtSection,
-  bcvRate,
-  bcvSource,
-  rateLoading,
-  totalUSD,
-  totalBs,
-  selectedPaymentMethod,
-  waiverAccepted,
-  setWaiverAccepted,
-}: Step4Props) {
-  return (
-    <div className="space-y-6">
-      {/* Shirt */}
+      {/* Talla de franela */}
       {showShirtSection && (
         <div>
           <div className="mb-3 flex items-center gap-2">
@@ -1963,6 +1931,166 @@ function renderStep4({
           <FieldError message={errors.shirtSize} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ============================================================
+// Paso 3: Pago (cuentas del evento + método + referencia + comprobante + BCV)
+// ============================================================
+
+interface Step3Props {
+  formData: RegFormData;
+  errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
+  update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
+  event: RegEvent;
+  bcvRate: number | null;
+  bcvSource: string | null;
+  rateLoading: boolean;
+  totalUSD: number;
+  totalBs: number | null;
+  selectedPaymentMethod: MetodoPago | null;
+  visibleAccounts: PaymentAccount[];
+  waiverAccepted: boolean;
+  setWaiverAccepted: (v: boolean) => void;
+}
+
+function renderStep3({
+  formData,
+  errors,
+  update,
+  event,
+  bcvRate,
+  bcvSource,
+  rateLoading,
+  totalUSD,
+  totalBs,
+  selectedPaymentMethod,
+  visibleAccounts,
+  waiverAccepted,
+  setWaiverAccepted,
+}: Step3Props) {
+  return (
+    <div className="space-y-6">
+      {/* Monto congelado */}
+      <div className="rounded-xl border border-red-200 bg-red-50/70 p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-[11px] font-semibold uppercase tracking-wide text-red-600">
+              Monto total a pagar
+            </p>
+            <p className="text-2xl font-bold text-gray-900">
+              ${totalUSD.toFixed(2)}
+              {totalBs !== null && (
+                <span className="ml-2 text-base font-semibold text-gray-600">
+                  / Bs.{" "}
+                  {totalBs.toLocaleString("es-VE", {
+                    minimumFractionDigits: 2,
+                    maximumFractionDigits: 2,
+                  })}
+                </span>
+              )}
+            </p>
+          </div>
+          <div className="text-right">
+            {rateLoading ? (
+              <p className="flex items-center gap-1 text-sm text-gray-500">
+                <Loader2 className="size-3.5 animate-spin" /> Cargando tasa BCV…
+              </p>
+            ) : bcvRate !== null ? (
+              <>
+                <p className="flex items-center gap-1 text-xs font-semibold text-red-700">
+                  <Lock className="size-3" /> Tasa BCV bloqueada
+                </p>
+                <p className="text-sm font-bold text-gray-900">
+                  Bs. {bcvRate.toLocaleString("es-VE", { maximumFractionDigits: 2 })} / USD
+                </p>
+              </>
+            ) : (
+              <p className="text-sm text-gray-500">Tasa BCV no disponible</p>
+            )}
+            {bcvSource && (
+              <p className="text-[10px] text-gray-400">{bcvSource}</p>
+            )}
+          </div>
+        </div>
+        <p className="mt-2 text-[11px] leading-relaxed text-gray-500">
+          El monto y la tasa quedan congelados con tu inscripción — aunque la
+          tasa BCV cambie después, tu pago ya está fijado.
+        </p>
+      </div>
+
+      {/* Cuentas de destino de pago del evento */}
+      <div>
+        <div className="mb-3 flex items-center gap-2">
+          <div className="flex size-8 items-center justify-center rounded-lg bg-red-50 text-red-600">
+            <Landmark className="size-4" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-900">
+              ¿Dónde pagar?
+            </h3>
+            <p className="text-xs text-gray-500">
+              {selectedPaymentMethod
+                ? `Cuentas para ${selectedPaymentMethod.label}:`
+                : "Estas son las cuentas del evento — elige tu método abajo y te mostramos la cuenta correspondiente."}
+            </p>
+          </div>
+        </div>
+
+        {visibleAccounts.length > 0 ? (
+          <div className="grid gap-3 sm:grid-cols-2">
+            {visibleAccounts.map((acc, idx) => {
+              const isHighlighted =
+                selectedPaymentMethod && acc.method === selectedPaymentMethod.id;
+              return (
+                <div
+                  key={`acc-${idx}`}
+                  className={`rounded-xl border p-3 transition-all ${
+                    isHighlighted
+                      ? "border-red-400 bg-red-50/60 ring-2 ring-red-100"
+                      : "border-gray-200 bg-white"
+                  }`}
+                >
+                  <div className="mb-1.5 flex items-center gap-1.5">
+                    {(() => {
+                      const Icon = PAYMENT_ICONS[acc.method] || CreditCard;
+                      return <Icon className="size-4 text-red-600" />;
+                    })()}
+                    <span className="text-sm font-bold text-gray-900">
+                      {accountLabel(acc)}
+                    </span>
+                    {isHighlighted && (
+                      <Badge className="ml-auto bg-red-600 text-[10px] text-white hover:bg-red-600">
+                        Tu método
+                      </Badge>
+                    )}
+                  </div>
+                  <ul className="space-y-0.5">
+                    {accountLines(acc).map((line, i) => (
+                      <li
+                        key={i}
+                        className="break-all text-xs leading-relaxed text-gray-600"
+                      >
+                        {line}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div className="flex items-start gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-800">
+            <Info className="mt-0.5 size-3.5 shrink-0" />
+            <p className="leading-relaxed">
+              El organizador aún no ha cargado las cuentas de pago para este
+              evento. Realiza tu pago por el canal habitual del evento y coloca
+              tu referencia abajo.
+            </p>
+          </div>
+        )}
+      </div>
 
       <Separator />
 
@@ -2050,6 +2178,11 @@ function renderStep4({
                 aria-invalid={!!errors.paymentRef}
               />
               <FieldError message={errors.paymentRef} />
+              <p className="mt-1.5 flex items-start gap-1 text-[11px] text-gray-400">
+                <Info className="mt-0.5 size-3 shrink-0" />
+                Cada inscripción necesita su propia referencia de pago — no
+                reutilices una usada antes en este evento.
+              </p>
             </div>
           )}
 
@@ -2063,9 +2196,9 @@ function renderStep4({
                 value={formData.paymentProof}
                 onChange={(b64) => update("paymentProof", b64)}
                 accept="image/*,.pdf"
-                maxSize={5}
+                maxSize={3}
                 label="Arrastra o haz clic para subir el comprobante"
-                hint="Captura o PDF del comprobante (máx 5MB)"
+                hint="Se comprime automáticamente en tu dispositivo (máx 3MB)"
               />
               <FieldError message={errors.paymentProof} />
             </div>
@@ -2080,67 +2213,6 @@ function renderStep4({
             )}
         </motion.div>
       )}
-
-      <Separator />
-
-      {/* BCV conversion */}
-      <div className="rounded-xl border border-amber-200 bg-amber-50/70 p-4">
-        <div className="flex items-center gap-2">
-          <TrendingUp className="size-4 text-amber-700" />
-          <h3 className="text-sm font-bold text-amber-900">
-            Conversión BCV (USD → Bs)
-          </h3>
-        </div>
-        <div className="mt-3 grid gap-3 sm:grid-cols-3">
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-amber-700">
-              Total USD
-            </p>
-            <p className="text-lg font-bold text-gray-900">
-              ${totalUSD.toFixed(2)}
-            </p>
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-amber-700">
-              Tasa BCV
-            </p>
-            {rateLoading ? (
-              <p className="flex items-center gap-1 text-sm text-gray-500">
-                <Loader2 className="size-3.5 animate-spin" /> Cargando…
-              </p>
-            ) : bcvRate !== null ? (
-              <p className="text-lg font-bold text-gray-900">
-                Bs.{" "}
-                {bcvRate.toLocaleString("es-VE", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500">No disponible</p>
-            )}
-            {bcvSource && (
-              <p className="text-[10px] text-amber-700/70">{bcvSource}</p>
-            )}
-          </div>
-          <div>
-            <p className="text-[11px] uppercase tracking-wide text-amber-700">
-              Total Bs
-            </p>
-            {totalBs !== null ? (
-              <p className="text-lg font-bold text-gray-900">
-                Bs.{" "}
-                {totalBs.toLocaleString("es-VE", {
-                  minimumFractionDigits: 2,
-                  maximumFractionDigits: 2,
-                })}
-              </p>
-            ) : (
-              <p className="text-sm text-gray-500">—</p>
-            )}
-          </div>
-        </div>
-      </div>
 
       {/* Waiver */}
       <div className="rounded-xl border border-gray-200 p-4">
@@ -2173,7 +2245,7 @@ function renderStep4({
   );
 }
 
-// Small helper component used inside Step 4 for the file-check label
+// Small helper component used inside Step 3 for the file-check label
 function FileCheckIcon() {
   return (
     <span className="inline-flex size-3.5 items-center justify-center">

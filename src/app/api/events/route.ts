@@ -98,6 +98,7 @@ export async function POST(request: NextRequest) {
       ageCalcMode, categoryInterval, hasShirt, hasShirtOption, shirtPrice,
       requiresFederationLicense, bannerHorizontalUrl, bannerVerticalUrl,
       shirtImage, kitInfoDetails, prizesImages, rulesFile, sponsorsLogos,
+      paymentAccounts, bibBoxSize,
     } = body;
 
     if (!title || !slug || !date || !location || !distance || !category) {
@@ -144,6 +145,10 @@ export async function POST(request: NextRequest) {
         categoryInterval: categoryInterval || "10",
         hasShirt: hasShirt !== false,
         requiresFederationLicense: requiresFederationLicense || false,
+        // Cuentas de destino de pago del evento (JSON array)
+        paymentAccounts: paymentAccounts || "[]",
+        // Tamaño del bloque de cajas físicas (100 o 150)
+        bibBoxSize: bibBoxSize != null && Number(bibBoxSize) > 0 ? Number(bibBoxSize) : 100,
       },
     });
 
