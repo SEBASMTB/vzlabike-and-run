@@ -25,18 +25,24 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-Nueva sección **Monitor Live** en la landing (commit `1b9a1e4`, deployado y verificado en producción):
-- `src/components/MonitorLiveSection.tsx` — ubicada entre ServicesSection y PlatformSection (`/#monitor-live`)
-- Foto real del monitor del evento (Santa Ana Corre 10K) en `public/monitor-live.webp` (1280x694, 63KB)
-- Animación Ken Burns ligera vía CSS (`animate-kenburns-live` en globals.css, solo transform/GPU, 26s, con `prefers-reduced-motion`) + badge EN VIVO con pulso
-- Copy: resultados al instante en la pantalla del evento, sin apps ni esperas, máxima precisión
-- CTAs: "Ver resultados en línea" (vbr-results.vercel.app) y "Solicitar para mi evento" (/#contacto)
-- Pendiente de feedback del usuario
+**FIX CRÍTICO del flujo de inscripción** (commit `1fde98d`, deployado, E2E local 16/16 PASS):
+
+Reporte del usuario: (1) creó evento con fecha 14/02/2027 y la inscripción mostraba 13 de febrero; (2) al marcar la fecha de nacimiento no se asignaba categoría y el paso 3 no dejaba avanzar ("Este evento no tiene categorías definidas"); (3) pidió diseñar hacia trabajo consistente con base de datos.
+
+Causas raíz encontradas y corregidas:
+- **Fecha off-by-one**: se guardaba medianoche UTC y se mostraba con zona local (UTC-4). Ahora: `src/lib/date-utils.ts` formatea SIEMPRE en UTC y date-only se guarda al mediodía UTC (POST/PUT eventos). Barrido UTC en ~12 archivos (EventCard, wizard, OrderSummary, waiver, emails, admin…).
+- **Categorías 500**: endpoint público leía `openCategories` (campo INEXISTENTE en el esquema) → PrismaClientValidationError. Reescrito: lee tabla `Category` (modelo Prisma) y si el evento no tiene categorías definidas sirve automáticamente las estándar del deporte (nunca bloquea la inscripción).
+- **Registro roto en Prisma**: el modelo `Registration` no tenía el campo `category` (texto) que existe en la BD, y exigía `runnerId`/`categoryId` → todo `registration.create` fallaba. Ahora: campo agregado al esquema, runnerId/categoryId opcionales, `categoryId` se resuelve por nombre al inscribir.
+- **Columna `hasShirt` faltante** en DDL/migraciones (P2022 en producción): añadida a db.ts y db-init.ts. Tabla `Runner` añadida al DDL (flujo FASE-2).
+- **Wizard**: auto-asigna la categoría según edad+género (badge "Asignada", el atleta puede cambiarla); MTB valida legacy JSON con reglas Élite/100 Kilos/Recreativo, BD/estándar con validación genérica.
+- Limpieza: eliminado `CategoryManager.tsx` huérfano (usaba tabla raw inexistente); ruta admin de categorías migrada al modelo `Category`.
+- Script E2E reutilizable: `scripts/e2e-registro-categorias.mjs` (16 checks).
 
 == SIGUIENTE PASO ==
-1. Esperar feedback del usuario sobre la sección Monitor Live (si envía una foto mejor resolución del monitor, reemplazar `public/monitor-live.webp` — ideal ≥1920x1080 sin recortes)
-2. Rediseño del flujo de inscripción/pagos (4 fases presentadas al usuario, esperando OK antes de implementar - ver PROPUESTA en PROYECTO-ESTADO.md)
-3. Unificación del sistema de categorías (Prisma Category vs raw SQL EventCategory)
+1. Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE" (slug `la-ruta-de-la-campana-admirable`): fecha 14 de febrero, categorías visibles y auto-asignadas
+2. Feedback pendiente de la sección Monitor Live (`1b9a1e4`)
+3. Rediseño del flujo de inscripción/pagos (4 fases presentadas, esperando OK del usuario)
+4. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
 
 == PROTOCOLO DE TRABAJO ==
 1. Cada cambio → commit atómico + git push origin main

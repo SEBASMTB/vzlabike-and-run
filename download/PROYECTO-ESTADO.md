@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `1b9a1e4`)  
+> Última actualización: 2026-11-25 (commit `1fde98d`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -156,22 +156,26 @@
 | 2 | ~~prizesImages no se renderizan en vista pública~~ | ✅ **Resuelto** (commit `9fa807c`) | Galería de imágenes integrada |
 | 3 | ~~rulesFile sin botón de descarga~~ | ✅ **Resuelto** (commit `9fa807c`) | Botón de descarga agregado |
 | 4 | ~~shirtImage y kitInfoDetails no se muestran~~ | ✅ **Resuelto** (commit `9fa807c`) | Sección de franela + kit integrada |
-| 5 | El sistema dual de categorías (`Category` Prisma vs `EventCategory` raw SQL) sigue sin reconciliar | **Pendiente** | El formulario usa `Category` Prisma (bulk endpoint). `CategoryManager` usa `EventCategory` raw SQL |
-| 6 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
-| 7 | ~~VERCEL NO DESPLIEGA los commits nuevos~~ | ✅ **Resuelto** (commit `98be1de`) | Causa raíz: `5491ae8` re-agregó 7 páginas duplicadas que `143d09d` había borrado → Turbopack "two parallel pages that resolve to the same path" ×6 → build Error en Vercel. Reproducido localmente, eliminados los duplicados, build PASS, deploy OK (`version: 2.1.0`) |
-| 8 | PUT/DELETE admin usan interpolación de strings con escape `''` (commits `5491ae8`/`06dc196` — libSQL no soporta params) | ⚠️ Aceptable | SQLite escapa comillas dobladas y las columnas van con allowlist. Refactorizar a params si el adaptador llega a soportarlos |
+| 5 | ~~Sistema dual de categorías (`Category` Prisma vs `EventCategory` raw SQL)~~ | ✅ **Resuelto** (commit `1fde98d`) | Fuente única = modelo Prisma `Category`. Endpoint público reescrito (lee Category + fallback estándar del deporte). Ruta admin migrada a Category. `CategoryManager` huérfano eliminado |
+| 6 | ~~Inscripción pública rota (HTTP 500 en `register`)~~ | ✅ **Resuelto** (commit `1fde98d`) | `Registration.category` (texto) agregado al schema; `runnerId`/`categoryId` opcionales; columna `hasShirt` añadida a DDL/migraciones (P2022); tabla `Runner` en DDL; `categoryId` se resuelve por nombre |
+| 7 | ~~Fecha del evento desplazada un día (14/02 mostraba 13/02)~~ | ✅ **Resuelto** (commit `1fde98d`) | `src/lib/date-utils.ts`: formateo SIEMPRE UTC; date-only se guarda al mediodía UTC en POST/PUT; barrido UTC en ~12 archivos |
+| 8 | ~~Wizard no asigna categoría por fecha de nacimiento~~ | ✅ **Resuelto** (commit `1fde98d`) | Auto-asignación por edad+género con badge "Asignada" (editable). Eventos sin categorías definidas reciben las estándar del deporte |
+| 9 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
+| 10 | PUT/DELETE admin usan interpolación de strings con escape `''` (commits `5491ae8`/`06dc196` — libSQL no soporta params) | ⚠️ Aceptable | SQLite escapa comillas dobladas y las columnas van con allowlist. Refactorizar a params si el adaptador llega a soportarlos |
 
 ---
 
 ## 🔍 REVISIÓN FLUJO INSCRIPCIONES/PAGOS (2026-11-10) — diagnóstico previo al rediseño
 
+> **ACTUALIZACIÓN 2026-11-25 (`1fde98d`)**: El hallazgo crítico y los items 1-parcial y 3 están RESUELTOS — la inscripción pública funciona E2E (E2E local 16/16 PASS en `scripts/e2e-registro-categorias.mjs`). Categorías: fuente única `Category` con fallback estándar del deporte. Límite de payload subido a 1.5MB (los comprobantes ya no dan 413, aunque aún no se persisten). Pendientes: persistir comprobante y montos, estados únicos, panel admin, PII (fases 1-2 y 4 de la propuesta).
+
 **Hallazgo crítico verificado en producción: LA INSCRIPCIÓN PÚBLICA ESTÁ ROTA (HTTP 500).**
-`POST /api/events/[slug]/register` hace `db.registration.create({ category: "texto" })` sin `runnerId`/`categoryId` que el schema exige (schema.prisma:144-147) → PrismaClientValidationError → 500. Probado en producción: 500 confirmado. Producción tiene **0 inscripciones** (el flujo nunca funcionó; no hay datos que migrar).
+`POST /api/events/[slug]/register` hace `db.registration.create({ category: "texto" })` sin `runnerId`/`categoryId` que el schema exige (schema.prisma:144-147) → PrismaClientValidationError → 500. Probado en producción: 500 confirmado. Producción tiene **0 inscripciones** (el flujo nunca funcionó; no hay datos que migrar). → **RESUELTO en `1fde98d`**
 
 Otros hallazgos clave (revisión completa 2026-11-10):
 1. **Comprobante de pago nunca se guarda**: wizard envía base64 pero el route no lo lee; además body limit 10KB → todo comprobante real da 413. Campo `paymentProofUrl` existe en BD y en el admin (muerto en la práctica).
 2. **Montos y tasa BCV se descartan**: wizard envía `totalAmount/bcvRate/totalBs` pero no se persisten → admin ve monto "—", revenue usa precio del evento.
-3. **Categorías: 4 fuentes en conflicto**: `Category` (Prisma, usa el formulario admin) / `Event.categories` TEXT legacy (lee el detalle público) / `openCategories` (columna fantasma → 500 en `/api/events/[slug]/categories` → wizard recibe 0 categorías) / `EventCategory` (tabla que no existe en ninguna BD; usada por endpoints y CategoryManager muerto). Admin escribe categorías que el atleta NUNCA ve.
+3. ~~Categorías: 4 fuentes en conflicto~~ **RESUELTO (`1fde98d`)**: fuente única = `Category` (Prisma); endpoint público lee Category con fallback estándar del deporte; `openCategories` eliminado; `EventCategory`/`CategoryManager` eliminados; inscripciones guardan categoryId + snapshot texto
 4. **Estados inconsistentes**: "pending" minúscula (register) vs "PENDING" (schema) vs "confirmed" legacy (stats/dashboard) → badges sin color, filtros confusos.
 5. **Admin inscripciones**: filtro por categoría roto (UI lo envía, API lo ignora), búsqueda por dorsal no existe (placeholder lo promete), sin motivo de rechazo, sin email al aprobar/rechazar, dorsal se asigna al crear (debería ser al aprobar), export ChuckScore incluye PENDING, sin acciones masivas.
 6. **Código muerto**: `/api/register` (el único endpoint alineado al schema — irónico), `/api/eligibility`, `RegistrationDialog` + `GroupRegistrationDialog` (vivos en la home, llaman al endpoint roto, taxonomía de pago distinta), `CategoryManager`, `InscribirsePage.tsx`.
@@ -192,6 +196,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+1fde98d fix: flujo de inscripcion funcional - fecha UTC, categorias desde BD y esquema Prisma alineado
 1b9a1e4 feat: nueva seccion Monitor Live - resultados en vivo en el sitio del evento (foto real + Ken Burns + badge EN VIVO)
 11eeb78 feat(diseno): fotos deportivas reales en Por Que Elegirnos, sin logos (reemplaza isometrico v2)
 6a24825 feat(diseno): ilustraciones estilo ChronoTrack v2 en Por Que Elegirnos - chip logo VBR via CSS overlay (anti-crop)
@@ -217,7 +222,9 @@ bf33f93 config: Activar Turso como base de datos de produccion
 
 ## 🚀 SIGUIENTE PASO INMEDIATO
 
-### 0. Continuar con el rediseño del flujo de inscripciones/pagos (diagnóstico arriba, 4 fases — esperar OK del usuario)
+### 0. Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE" (`la-ruta-de-la-campana-admirable`) — fecha 14 feb + categorías auto-asignadas
+
+### 0.1 Continuar con el rediseño del flujo de inscripciones/pagos (fases 1-2 y 4 restantes — esperar OK del usuario; Fase 3 ya resuelta en `1fde98d`)
 
 ### 1. Re-subir la imagen del evento MISS desde el panel (perdida en el incidente del 2026-11-10)
 
