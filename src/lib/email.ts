@@ -176,12 +176,16 @@ export async function sendPreRegistrationEmail(data: EmailRegistrationData): Pro
     }
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: [data.email],
       subject: `Pre-Registro Confirmado - ${data.eventTitle}`,
       html: generatePreRegistrationHTML(data),
     });
+    if (error) {
+      console.error(`Resend rechazó el pre-registro a ${data.email}:`, error);
+      return false;
+    }
 
     console.log(`Email de pre-registro enviado a ${data.email} para ${data.eventTitle}`);
     return true;
@@ -397,12 +401,16 @@ export async function sendApprovalEmail(
     }
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: [data.email],
       subject: `Inscripcion aprobada${data.bibNumber != null ? ` — Dorsal #${data.bibNumber}` : ""} — ${data.eventTitle}`,
       html: generateApprovalHTML(data),
     });
+    if (error) {
+      console.error(`Resend rechazó la aprobación a ${data.email}:`, error);
+      return { sent: false, error: `${error.name || "error"}: ${error.message}`.slice(0, 200) };
+    }
 
     console.log(`Email de aprobación enviado a ${data.email} (dorsal ${data.bibNumber ?? "n/d"})`);
     return { sent: true };
@@ -662,12 +670,16 @@ export async function sendRejectionEmail(
     }
 
     const resend = new Resend(process.env.RESEND_API_KEY);
-    await resend.emails.send({
+    const { error } = await resend.emails.send({
       from: `${FROM_NAME} <${FROM_EMAIL}>`,
       to: [data.email],
       subject: `Inscripcion rechazada — accion requerida — ${data.eventTitle}`,
       html: generateRejectionHTML(data),
     });
+    if (error) {
+      console.error(`Resend rechazó el envío del rechazo a ${data.email}:`, error);
+      return { sent: false, error: `${error.name || "error"}: ${error.message}`.slice(0, 200) };
+    }
 
     console.log(`Email de rechazo enviado a ${data.email} (${data.eventTitle})`);
     return { sent: true };
