@@ -20,7 +20,10 @@ export async function GET(request: NextRequest) {
     const eventId = searchParams.get("eventId");
 
     const where: Record<string, unknown> = {};
-    if (status) where.status = status.toUpperCase();
+    // "todos"/"all" = sin filtro de estado (para no romper la bandeja)
+    if (status && !["todos", "all", ""].includes(status.toLowerCase())) {
+      where.status = status.toUpperCase();
+    }
     if (eventId) where.eventId = eventId;
 
     const records = await db.paymentRecord.findMany({
