@@ -2,7 +2,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { assignBibForRegistration } from "@/lib/bib-assignment";
-import { sendApprovalEmail } from "@/lib/email";
+import { sendApprovalEmail, sendRejectionEmail } from "@/lib/email";
 
 /** Correo de aprobación por inscripción; jamás lanza */
 async function notifyApprovalSafe(regId: string): Promise<boolean> {
@@ -39,13 +39,48 @@ async function notifyApprovalSafe(regId: string): Promise<boolean> {
   }
 }
 
+/** Correo de rechazo por inscripción; jamás lanza */
+async function notifyRejectionSafe(regId: string): Promise<boolean> {
+  try {
+    const reg = await db.registration.findUnique({ where: { id: regId } });
+    if (!reg?.email) return false;
+    const event = await db.event.findUnique({ where: { id: reg.eventId } });
+    let categoryName: string | null = reg.category || null;
+    if (reg.categoryId) {
+      try {
+        const cat = await db.category.findUnique({
+          where: { id: reg.categoryId },
+          select: { name: true },
+        });
+        if (cat) categoryName = cat.name;
+      } catch {}
+    }
+    const result = await sendRejectionEmail({
+      firstName: reg.firstName,
+      lastName: reg.lastName,
+      email: reg.email,
+      eventTitle: event?.title || "",
+      eventDate: event?.date ? String(event.date) : null,
+      eventLocation: event?.location || null,
+      eventDistance: event?.distance || null,
+      categoryName,
+      rejectReason: reg.rejectReason || "",
+      eventSlug: event?.slug || null,
+    });
+    return result.sent;
+  } catch {
+    return false;
+  }
+}
+
 /**
  * POST /api/admin/registrations/bulk
  *
  * Acciones masivas sobre inscripciones del panel admin:
  *   - approve: aprueba cada inscripción y asigna dorsal + caja de forma
  *     atómica (lote de la categoría de cada corredor).
- *   - reject: rechaza con motivo obligatorio y libera el dorsal.
+ *   - reject: rechaza con motivo obligatorio, libera el dorsal y envía el
+ *     correo de rechazo al corredor (motivo + cómo corregir/reportar pago).
  *   - delete: elimina permanentemente.
  *
  * Body: { action: "approve" | "reject" | "delete", ids: string[], reason?: string }
@@ -78,7 +113,7 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const results = { ok: 0, fail: 0 };
+      const results = { ok: 0, fail: 0, emailsSent: 0 };
       for (const id of ids) {
         try {
           const existing = await db.registration.findUnique({ where: { id } });
@@ -96,6 +131,10 @@ export async function POST(request: NextRequest) {
           }
           await db.registration.update({ where: { id }, data });
           results.ok++;
+          // Correo al corredor solo en la transición real a REJECTED
+          if (String(existing.status || "").toUpperCase() !== "REJECTED") {
+            if (await notifyRejectionSafe(id)) results.emailsSent++;
+          }
         } catch {
           results.fail++;
         }

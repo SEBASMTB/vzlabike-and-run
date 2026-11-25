@@ -411,3 +411,268 @@ export async function sendApprovalEmail(
     return { sent: false, error: String(error).slice(0, 200) };
   }
 }
+
+// ============================================================
+// CORREO DE INSCRIPCIÓN RECHAZADA (motivo + cómo corregir)
+// ============================================================
+
+interface RejectionEmailData {
+  firstName: string;
+  lastName: string;
+  email: string;
+  eventTitle: string;
+  eventDate?: string | null;
+  eventLocation?: string | null;
+  eventDistance?: string | null;
+  categoryName?: string | null;
+  rejectReason: string;
+  eventSlug?: string | null;
+}
+
+function generateRejectionHTML(data: RejectionEmailData): string {
+  const formattedDate = data.eventDate
+    ? formatEventDate(data.eventDate, {
+        weekday: "long",
+        year: "numeric",
+        month: "long",
+        day: "numeric",
+      })
+    : "";
+  const eventUrl = `${SITE_URL}${data.eventSlug ? `/eventos/${data.eventSlug}` : "/eventos"}`;
+  // Escape básico para que el motivo escrito por el organizador no rompa el HTML
+  const reason = String(data.rejectReason || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+
+  return `
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Inscripcion Rechazada - ${data.eventTitle}</title>
+</head>
+<body style="margin: 0; padding: 0; background-color: #f5f5f5; font-family: Arial, Helvetica, sans-serif;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 20px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 20px rgba(0,0,0,0.08);">
+
+          <!-- Header Banner -->
+          <tr>
+            <td style="background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%); padding: 30px 40px; text-align: center;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: bold;">
+                VzlaBike and Run
+              </h1>
+              <p style="margin: 8px 0 0 0; color: rgba(255,255,255,0.7); font-size: 14px;">
+                Inscripcion Rechazada
+              </p>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px;">
+              <p style="margin: 0 0 8px 0; font-size: 16px; color: #333333;">
+                Hola <strong>${data.firstName} ${data.lastName}</strong>,
+              </p>
+              <p style="margin: 0 0 24px 0; font-size: 16px; color: #555555; line-height: 1.6;">
+                Revisamos tu inscripcion para el evento <strong>${data.eventTitle}</strong> y en esta
+                ocasion <strong style="color: #dc2626;">no pudimos aprobar tu pago</strong>. Tu inscripcion
+                sigue en nuestro sistema: corrige lo indicado y vuelve a reportar tu pago para participar.
+              </p>
+
+              <!-- Motivo del rechazo -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #fef2f2; border-radius: 8px; border: 1px solid #fecaca; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 18px 20px;">
+                    <p style="margin: 0 0 6px 0; color: #991b1b; font-size: 13px; text-transform: uppercase; letter-spacing: 1px; font-weight: bold;">
+                      Motivo del rechazo
+                    </p>
+                    <p style="margin: 0; color: #991b1b; font-size: 16px; font-weight: 600; line-height: 1.5;">
+                      ${reason}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Que puedes hacer ahora -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <p style="margin: 0 0 14px 0; font-size: 16px; font-weight: bold; color: #1a1a2e;">
+                      Que puedes hacer ahora
+                    </p>
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #555555; line-height: 1.6;">
+                      <strong>1.</strong> Revisa el motivo indicado arriba: normalmente es un comprobante ilegible,
+                      una referencia no encontrada o datos incompletos.
+                    </p>
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #555555; line-height: 1.6;">
+                      <strong>2.</strong> Vuelve a reportar tu pago por WhatsApp: envianos una foto clara del
+                      comprobante donde se lean monto, fecha y referencia (o la correccion de tus datos).
+                    </p>
+                    <p style="margin: 0 0 10px 0; font-size: 14px; color: #555555; line-height: 1.6;">
+                      <strong>3.</strong> El organizador verificara tu reporte: al aprobarlo recibiras un correo
+                      con tu <strong>numero de corredor (dorsal)</strong> y tu <strong>caja de retiro del kit</strong>.
+                    </p>
+                    <p style="margin: 0; font-size: 14px; color: #555555; line-height: 1.6;">
+                      <strong>4.</strong> Puedes consultar el estado de tu inscripcion en la pagina del evento
+                      con tu cedula.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Event Card -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h2 style="margin: 0 0 16px 0; font-size: 20px; color: #1a1a2e;">
+                      ${data.eventTitle}
+                    </h2>
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+                      ${
+                        formattedDate
+                          ? `<tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="color: #888888; font-size: 13px;">FECHA</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${formattedDate}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        data.eventLocation
+                          ? `<tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="color: #888888; font-size: 13px;">LUGAR</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${data.eventLocation}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        data.eventDistance
+                          ? `<tr>
+                        <td style="padding: 8px 0; border-bottom: 1px solid #e2e8f0;">
+                          <span style="color: #888888; font-size: 13px;">DISTANCIA</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${data.eventDistance}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                      ${
+                        data.categoryName
+                          ? `<tr>
+                        <td style="padding: 8px 0;">
+                          <span style="color: #888888; font-size: 13px;">CATEGORIA</span><br>
+                          <span style="color: #333333; font-size: 15px; font-weight: 600;">${data.categoryName}</span>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Important Notice -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background-color: #fffbeb; border-radius: 8px; border: 1px solid #fbbf24; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 16px 20px;">
+                    <p style="margin: 0; color: #92400e; font-size: 14px; line-height: 1.5;">
+                      <strong>Importante:</strong> si crees que este rechazo es un error o ya corregiste el pago,
+                      escribenos por WhatsApp y lo revisamos de inmediato.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- WhatsApp Button -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td align="center">
+                    <a href="https://wa.me/584120162685" style="display: inline-block; background-color: #25d366; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                      Corregir / reportar mi pago por WhatsApp
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- CTA Button -->
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td align="center">
+                    <a href="${eventUrl}" style="display: inline-block; background-color: #0f3460; color: #ffffff; text-decoration: none; padding: 12px 28px; border-radius: 8px; font-weight: 600; font-size: 14px;">
+                      Ver detalles del evento
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <p style="margin: 0; font-size: 14px; color: #777777; line-height: 1.6;">
+                Te esperamos en la linea de partida. Mucha suerte!
+              </p>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="background-color: #f8fafc; padding: 24px 40px; border-top: 1px solid #e2e8f0; text-align: center;">
+              <p style="margin: 0 0 4px 0; font-size: 14px; color: #333333; font-weight: 600;">
+                VzlaBike and Run
+              </p>
+              <p style="margin: 0 0 4px 0; font-size: 12px; color: #999999;">
+                ${FROM_EMAIL}
+              </p>
+              <p style="margin: 0; font-size: 12px; color: #bbb;">
+                <a href="${SITE_URL}" style="color: #0f3460; text-decoration: none;">${SITE_URL}</a>
+              </p>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`;
+}
+
+/**
+ * Correo de INSCRIPCIÓN RECHAZADA: motivo obligatorio del organizador +
+ * instrucciones claras para corregir o volver a reportar el pago.
+ * No lanza excepciones — devuelve {sent:false, error} si no hay API key
+ * o el envío falla, para que el rechazo nunca se bloquee.
+ */
+export async function sendRejectionEmail(
+  data: RejectionEmailData
+): Promise<{ sent: boolean; skipped?: boolean; error?: string }> {
+  try {
+    if (!data.email || !data.email.includes("@")) {
+      return { sent: false, skipped: true, error: "El corredor no tiene correo registrado" };
+    }
+    if (!process.env.RESEND_API_KEY) {
+      console.log(
+        `Email: RESEND_API_KEY no configurada — rechazo de ${data.firstName} ${data.lastName} (${data.email}) no notificado por correo`
+      );
+      return { sent: false, skipped: true, error: "RESEND_API_KEY no configurada" };
+    }
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    await resend.emails.send({
+      from: `${FROM_NAME} <${FROM_EMAIL}>`,
+      to: [data.email],
+      subject: `Inscripcion rechazada — accion requerida — ${data.eventTitle}`,
+      html: generateRejectionHTML(data),
+    });
+
+    console.log(`Email de rechazo enviado a ${data.email} (${data.eventTitle})`);
+    return { sent: true };
+  } catch (error) {
+    console.error("Error enviando email de rechazo:", error);
+    return { sent: false, error: String(error).slice(0, 200) };
+  }
+}

@@ -10,6 +10,8 @@ import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
  *
  * - Solo acepta la cédula del propio atleta (rate-limited por IP).
  * - Devuelve el MÍNIMO de datos: nombre, categoría, estado, dorsal y caja.
+ *   Si fue RECHAZADA incluye el motivo para que el corredor pueda corregir
+ *   o volver a reportar su pago (es su propio dato, nunca PII de terceros).
  * - NUNCA expone email, teléfono, fecha de nacimiento, contacto de
  *   emergencia ni referencia de pago.
  */
@@ -64,6 +66,7 @@ export async function GET(
         bibNumber: true,
         bibBoxLabel: true,
         shirtSize: true,
+        rejectReason: true,
       },
     });
 
@@ -100,6 +103,7 @@ export async function GET(
       bibNumber: status === "APPROVED" ? reg.bibNumber : null,
       bibBoxLabel: status === "APPROVED" ? reg.bibBoxLabel || null : null,
       shirtSize: reg.shirtSize || null,
+      rejectReason: status === "REJECTED" ? reg.rejectReason || null : null,
     });
   } catch (err) {
     console.error("[API mi-inscripcion] Error:", err);

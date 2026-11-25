@@ -23,6 +23,7 @@ interface LookupResult {
   bibNumber?: number | null;
   bibBoxLabel?: string | null;
   shirtSize?: string | null;
+  rejectReason?: string | null;
 }
 
 export function BibLookupWidget({ slug }: { slug: string }) {
@@ -139,6 +140,25 @@ export function BibLookupWidget({ slug }: { slug: string }) {
                   Tu dorsal y caja se asignan automáticamente cuando el
                   organizador apruebe tu pago.
                 </p>
+              )}
+              {result.status === "REJECTED" && result.rejectReason && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2">
+                  <p className="text-xs font-semibold text-red-800">
+                    Motivo: {result.rejectReason}
+                  </p>
+                  <p className="mt-1 text-xs text-red-700">
+                    Corrige lo indicado y vuelve a reportar tu pago por
+                    WhatsApp para participar.
+                  </p>
+                  <a
+                    href="https://wa.me/584120162685"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-2 inline-block rounded-md bg-[#25d366] px-3 py-1.5 text-xs font-semibold text-white hover:opacity-90"
+                  >
+                    Corregir / reportar por WhatsApp
+                  </a>
+                </div>
               )}
             </div>
           ) : (

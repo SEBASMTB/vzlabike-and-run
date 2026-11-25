@@ -466,7 +466,9 @@ export default function AdminInscripcionesPage() {
             ? ` — Dorsal #${data.bibNumber} asignado (${data.bibBoxLabel || "caja"})`
             : "";
         const emailMsg =
-          newStatus === "APPROVED" && data?.emailSent && data?.emailSentTo
+          (newStatus === "APPROVED" || newStatus === "REJECTED") &&
+          data?.emailSent &&
+          data?.emailSentTo
             ? ` · Correo enviado a ${data.emailSentTo}`
             : "";
         toast({
@@ -479,6 +481,12 @@ export default function AdminInscripcionesPage() {
             title: "Atención con el dorsal",
             description: data.bibWarning,
             variant: "destructive",
+          });
+        }
+        if (newStatus === "REJECTED" && !data?.emailSent && data?.emailError) {
+          toast({
+            title: "Correo de rechazo no enviado",
+            description: `${data.emailError}. Comunícate con el corredor por WhatsApp.`,
           });
         }
         return true;
@@ -627,7 +635,7 @@ export default function AdminInscripcionesPage() {
           action === "approve"
             ? `${data.approved?.length ?? 0} aprobadas con dorsal asignado`
             : action === "reject"
-            ? `${data.ok ?? 0} rechazadas`
+            ? `${data.ok ?? 0} rechazadas${data.emailsSent ? ` · ${data.emailsSent} correo(s) enviado(s)` : ""}`
             : `${data.ok ?? 0} eliminadas`;
         toast({
           title: "Acción masiva completada",
@@ -1820,8 +1828,8 @@ export default function AdminInscripcionesPage() {
             <DialogTitle>Rechazar inscripción</DialogTitle>
             <DialogDescription>
               {rejectTargetIds.length === 1
-                ? "Indica el motivo del rechazo (obligatorio). El dorsal asignado se libera."
-                : `Vas a rechazar ${rejectTargetIds.length} inscripciones. Indica el motivo (obligatorio).`}
+                ? "Indica el motivo del rechazo (obligatorio). El dorsal asignado se libera y el corredor recibe un correo con este motivo y los pasos para corregir o volver a reportar su pago."
+                : `Vas a rechazar ${rejectTargetIds.length} inscripciones. Indica el motivo (obligatorio). Cada corredor con correo recibirá un email con el motivo y los pasos para corregir su pago.`}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-3 py-2">
