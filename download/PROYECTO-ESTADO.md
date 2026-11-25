@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `cb25c17`)  
+> Última actualización: 2026-11-25 (commit `d8ce9e9`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -34,6 +34,47 @@
 **Variables de entorno (Vercel + .env local):**
 - `DATABASE_URL` = `libsql://vzlabikeandrun-vbrresult.aws-us-west-2.turso.io`
 - `TURSO_AUTH_TOKEN` = (en Vercel Environment Variables + .env local, NO en git)
+
+---
+
+## 🌐 DIRECCIONES DE ACCESO (REGLA: SIEMPRE darlas al usuario)
+
+> ⭐ **REGLA DE ORO impuesta por el usuario (2026-11-25):** *"RECUERDA SIEMPRE DARME LAS DIRECCIONES PARA ENTRAR"*.
+> Al final de CADA cambio funcional, CADA sesión y CADA entregable, listar SIEMPRE las URLs
+> actualizadas de todo lo que se creó o modificó + las de acceso general. Nunca terminar una
+> respuesta sin direcciones de entrada.
+
+### Generales
+| Página | URL |
+|--------|-----|
+| **Inicio** | https://vzlabike-and-run.vercel.app/ |
+| **Eventos (lista pública)** | https://vzlabike-and-run.vercel.app/eventos |
+| **Tienda** | https://vzlabike-and-run.vercel.app/tienda |
+| **Resultados** | https://vzlabike-and-run.vercel.app/resultados |
+| **Monitor Live** | https://vzlabike-and-run.vercel.app/#monitor-live |
+
+### Panel Admin (contraseña: `vzlabike2024`)
+| Página | URL |
+|--------|-----|
+| **Login Admin** | https://vzlabike-and-run.vercel.app/admin/login |
+| **Dashboard** | https://vzlabike-and-run.vercel.app/admin |
+| **Gestión de Eventos** (lotes de dorsales, cajas, cuentas de pago) | https://vzlabike-and-run.vercel.app/admin/eventos |
+| **Inscripciones** (aprobar/rechazar, dorsales, ⚡ inscripción rápida, "Pagos sin Ficha", Excel/ChuckScore) | https://vzlabike-and-run.vercel.app/admin/inscripciones |
+| **Admin Tienda** | https://vzlabike-and-run.vercel.app/admin/tienda |
+| **Pedidos** | https://vzlabike-and-run.vercel.app/admin/pedidos |
+| **Salir** | https://vzlabike-and-run.vercel.app/admin/logout |
+
+### Por evento (patrón + eventos activos)
+- Detalle: `/eventos/{slug}` · **Inscribirse (wizard 3 pasos):** `/eventos/{slug}/inscribirse` · **Lista inscritos:** `/eventos/{slug}/inscritos`
+- Ejemplo completo (LA RUTA DE LA CAMPAÑA ADMIRABLE):
+  - https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable
+  - https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscribirse
+  - https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscritos
+
+**Slugs activos (8):** `farmaluna-10k-2024` · `womens-run-2024` · `la-ruta-digital-2024` · `maraton-caracas-2024` · `triatlon-vzla-2024` · `21k-la-autopista` · `la-ruta-de-la-campana-admirable` · `miss`
+
+### Consulta del corredor (dorsal + caja)
+- El widget **"¿Ya te inscribiste?"** está en la página de detalle de cada evento (consulta por cédula, muestra estado + dorsal + caja de retiro).
 
 ---
 
@@ -279,3 +320,5 @@ faf9474 feat(diseno): tipografia Figtree estilo Active Network
 5. **Al final de cada sesión**, actualizar `SESSION-RESUME.md` con el resumen técnico exacto
 
 6. **Nunca dejar cambios sin commitear** — si el chat se cierra, los cambios se pierden
+
+7. **SIEMPRE terminar la respuesta con las DIRECCIONES DE ACCESO** (URLs) de lo creado/modificado + URLs generales — regla impuesta por el usuario. Igual en commits, deploys y resúmenes.

@@ -119,6 +119,7 @@ El usuario dio luz verde al rediseño completo y se implementó TODO en 8 commit
    pruebas del usuario).
 
 == REGLAS DE ORO DEL PROYECTO ==
+- ⭐ SIEMPRE terminar cada respuesta con las DIRECCIONES DE ACCESO (URLs): las de lo creado/modificado + las generales (Admin: /admin/login pass vzlabike2024, wizard: /eventos/{slug}/inscribirse, inscritos: /eventos/{slug}/inscritos). Regla impuesta por el usuario: "RECUERDA SIEMPRE DARME LAS DIRECCIONES PARA ENTRAR". Tabla completa en PROYECTO-ESTADO.md sección "🌐 DIRECCIONES DE ACCESO".
 - Protocolo de guardado: commit atómico → git pull --rebase origin main → git push
   origin main → esperar deploy Vercel → verificar en producción → actualizar
   PROYECTO-ESTADO.md y SESSION-RESUME.md → segundo commit/push de docs.
