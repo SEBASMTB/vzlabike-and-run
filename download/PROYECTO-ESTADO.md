@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `75eb592`)  
+> Última actualización: 2026-11-25 (commit `b0aeace`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -138,6 +138,13 @@
 - [x] **Referencia de pago única por evento** (índice único parcial `(eventId, paymentRef)` + validación normalizada en el registro: `66-0123` colisiona con `660123`)
 - [x] **Estados únicos PENDING / APPROVED / REJECTED** (normalización automática de legacy `pending/confirmed/rejected` en el arranque de BD)
 - [x] **Modelo `PaymentRecord`** (Pagos sin Ficha) con estados UNMATCHED/MATCHED/IGNORED y `matchedRegistrationId`
+
+### 🔔 Notificaciones al corredor (nuevo — `b0aeace`)
+- [x] **Correo automático al APROBAR** (`src/lib/email.ts` → `sendApprovalEmail`): se dispara al confirmar el pago (PATCH individual, aprobación masiva e inscripción rápida en sitio). HTML con **dorsal destacado**, **caja de retiro del kit**, **categoría** y datos del evento (fecha/lugar/distancia) + botón al evento. **Jamás bloquea la aprobación**: si falla o no hay API key, se registra y continúa. La respuesta admin incluye `emailSent/emailSentTo` y el toast del panel lo muestra
+- [x] **Botón WhatsApp en /admin** (`src/lib/notify.ts` puro compartido): en cada fila APPROVED (icono verde), en el dialog de detalle (botón completo) y en el resultado de la inscripción rápida — abre `wa.me` con el mensaje ya armado (nombre, evento, fecha, lugar, categoría, **DORSAL** y **caja**). Normaliza teléfonos venezolanos (0412…/412…/+58 → 58412…). **Funciona SIN configuración**, listo desde ya
+- [x] **Consulta pública sin PII VERIFICADA en producción** (`GET /api/events/[slug]/mi-inscripcion`): devuelve SOLO `firstName/lastName, category, status, bibNumber, bibBoxLabel, shirtSize` — **nunca** email, teléfono, referencia de pago ni fecha de nacimiento (rate-limited 20/min por IP). E2E con assert en producción (`b0aeace`)
+- [x] **⚠️ CONFIGURACIÓN PENDIENTE DEL USUARIO (5 min) para activar el correo**: agregar en Vercel → Settings → Environment Variables: `RESEND_API_KEY` (resend.com, plan gratuito 100 correos/día) y opcionalmente `FROM_EMAIL` con un dominio verificado en Resend (por defecto usa `venezuelabikeandrun@gmail.com`, que requiere dominio verificado para enviar a cualquier destinatario). Sin la key TODO funciona; solo se saltan los correos (queda registrado en el log y en la respuesta como `emailSkipped`)
+- [x] Tests: `scripts/test-notify.ts` 22/22 (normalización VE, mensaje, URL); E2E producción `scripts/e2e-notificaciones-prod.sh` (inscripción con email → skip limpio, mi-inscripcion sin PII, PATCH con reporte de correo, limpieza)
 
 ### 🧹 Limpieza y seguridad (`71b6595`)
 - [x] Eliminado **código muerto con fuga PII**: `GET /api/registrations/lookup` (devolvía email/teléfono/DOB por cédula sin auth), `RegistrationDialog`, `GroupRegistrationDialog` (llamaban al endpoint roto `/api/register`), `/api/register`, `/api/register-group`, `/api/eligibility`

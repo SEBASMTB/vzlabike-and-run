@@ -14,7 +14,7 @@ Estoy trabajando en el proyecto VzlaBike and Run, una plataforma de cronometraje
 - Deploy Vercel: https://vzlabike-and-run.vercel.app
 - Admin: https://vzlabike-and-run.vercel.app/admin/login (pass: vzlabike2024)
 - Base de datos: Turso (libsql://vzlabikeandrun-vbrresult.aws-us-west-2.turso.io)
-- Última sesión cerrada: 2026-11-25, HEAD = 75eb592
+- Última sesión cerrada: 2026-11-25, HEAD = b0aeace
 - Guía de staging: download/STAGING-SETUP.md (subdominio + Turso separada, aún sin crear)
 
 == ARCHIVO DE ESTADO COMPLETO ==
@@ -104,7 +104,38 @@ El usuario dio luz verde al rediseño completo y se implementó TODO en 8 commit
   inscritos 200. NOTA: un check de conciliación falló por lag de réplica Turso (lectura
   desactualizada un instante); el matching funciona — informativo, no requiere acción.
 
-== LO ÚLTIMO QUE SE HIZO (2026-11-25, FIX DORSALES `75eb592`) ==
+== LO ÚLTIMO QUE SE HIZO (2026-11-25, NOTIFICACIONES `b0aeace`) ==
+
+Pregunta del usuario: "¿cómo le llega el dorsal/caja al corredor si no entra al sitio?".
+Implementado en 1 commit (`b0aeace`, verificado en producción):
+
+1. CORREO AUTOMÁTICO AL APROBAR: `src/lib/email.ts` → `sendApprovalEmail()` (Resend SDK,
+   ya estaba en package.json). HTML con dorsal destacado, caja de retiro, categoría y datos
+   del evento. Se dispara en: PATCH /api/admin/registrations/[id] (APPROVED), bulk approve
+   (solo transiciones nuevas, respuesta incluye emailsSent) y quick (en sitio). NUNCA
+   bloquea: sin RESEND_API_KEY → {sent:false, skipped:true, error:'RESEND_API_KEY no
+   configurada'} y la aprobación continúa. Respuesta admin: emailSent/emailSentTo y el
+   toast del panel muestra "· Correo enviado a X".
+2. BOTÓN WHATSAPP EN /admin: `src/lib/notify.ts` (puro, cliente+servidor):
+   normalizeWhatsappPhone (0412-1234567→584121234567, 412…→58+, +58→igual, otros países
+   7-15 dígitos), buildApprovalMessage (nombre/evento/fecha/lugar/categoría/DORSAL/caja +
+   link consulta + instrucción de presentarse en la caja), whatsappApprovalUrl. UI: icono
+   verde MessageCircle en filas APPROVED, botón completo en dialog detalle, botón en el
+   resultado de inscripción rápida. Funciona SIN configuración.
+3. CONSULTA PÚBLICA SIN PII: mi-inscripcion YA era segura (rate-limit 20/min, solo
+   firstName/lastName/category/status/bibNumber/bibBoxLabel/shirtSize). VERIFICADO con
+   assert en producción: claves exactas sin email/phone/paymentRef/DOB.
+4. Soporte: listado admin ahora SELECT incluye e.slug/e.location (para el mensaje);
+   QuickResult del panel lleva nombre/teléfono/evento/categoría para el botón; test
+   scripts/test-notify.ts 22/22; E2E producción scripts/e2e-notificaciones-prod.sh
+   (inscripción con email → skip limpio, sin PII, PATCH reporta correo, cleanup OK).
+
+⚠️ PENDIENTE DEL USUARIO PARA ACTIVAR EL CORREO (5 min): Vercel → Settings → Environment
+Variables → añadir `RESEND_API_KEY` (resend.com, gratis 100/día) y opcionalmente
+`FROM_EMAIL` con dominio verificado en Resend. Sin key todo funciona, solo se saltan los
+correos. WhatsApp funciona desde ya sin configurar nada.
+
+== LO ANTERIOR (2026-11-25, FIX DORSALES `75eb592`) ==
 
 El usuario reportó: al inscribirse como Máster C recibió el dorsal #1. CAUSA: el evento no
 tenía lotes configurados y `assignBibForRegistration` tenía un fallback global (primer libre
@@ -145,10 +176,11 @@ CORRECCIÓN (commit `75eb592`, verificado en producción):
    configurarlos explícitos para verlos/editarlos en el panel.
 
 == SIGUIENTE PASO ==
-1. (Opcional) Crear staging con download/STAGING-SETUP.md.
-2. Email al aprobar/rechar con Resend (fase 2 restante).
-3. Re-subir imagen del evento MISS desde el panel (incidente 2026-11-10).
-4. Verificar con el usuario si restaurar CAMPAÑA ADMIRABLE y LA CULATA (borradas en
+1. (USUARIO, 5 min) Añadir RESEND_API_KEY + FROM_EMAIL en Vercel para activar el correo de aprobación (ver sección NOTIFICACIONES).
+2. (Opcional) Correo al RECHAZAR con el motivo (fase que falta).
+3. (Opcional) Crear staging con download/STAGING-SETUP.md.
+4. Re-subir imagen del evento MISS desde el panel (incidente 2026-11-10).
+5. Verificar con el usuario si restaurar CAMPAÑA ADMIRABLE y LA CULATA (borradas en
    pruebas del usuario).
 
 == REGLAS DE ORO DEL PROYECTO ==
