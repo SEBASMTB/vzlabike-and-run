@@ -25,7 +25,20 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-**EXPERIENCIA DE INSCRIPCIÓN 2.0** (commit `ee345c3`, deployado y verificado en producción 2026-11-25):
+**CUPOS EN VIVO + EXCEL + LISTA PÚBLICA** (commit `0b1b979`, deployado y verificado en producción 2026-11-25):
+
+Pedido del usuario (con captura del evento mostrando "Cupos disponibles: 500 de 500"):
+1. "Cuando inscribo en un evento no me hace el descuento de los cupos; he inscrito dos personas y no hace el descuento" → CAUSA: la página de detalle forzaba `registrationCount: 0` y el API no devolvía el conteo. FIX: `/api/events/[slug]` expone `registrationCount` real, `/api/events` suma COUNT por evento, el cliente usa el valor real. **Producción: LA RUTA DE LA CAMPAÑA ADMIRABLE muestra "498 de 500" y "Participantes 2 / 500".**
+2. "En el panel administrativo debo tener la opción de descargar en Excel" → NUEVO `GET /api/admin/export/inscripciones` (ExcelJS, 26 columnas: dorsal, cédula, nombre, género, f. nacimiento, categoría, equipo, talla franela, camiseta, email, teléfono, estado, ciudad, emergencia con parentesco, método/referencia, montos USD/Bs, tasa BCV, evento, fecha, estado, waiver). Respeta los filtros activos del panel (evento/estado/categoría/búsqueda); botón "Exportar Excel (.xlsx)" siempre visible. Además: el filtro por categoría AHORA SÍ filtra (la API ignoraba categoryId) y la exportación ChuckScore estaba ROTA (500 por `include: { category: true }` — la relación es `categoryRef`) → reescrita con raw SQL + JOINs, verificada en producción.
+3. "Tener la opción de un listado por evento para publicar" → LISTA PÚBLICA `/eventos/[slug]/inscritos` reescrita sobre el nuevo endpoint `GET /api/events/[slug]/participantes` (dorsal, nombre, categoría, equipo, ciudad, estado Confirmado/Pendiente; SIN cédula ni fecha de nacimiento ni contactos; REJECTED ocultas). Hero con 4 stats, buscador, botón imprimir, CTA de inscripción. Enlace "Ver lista de inscritos (N)" en la página del evento y botón "Lista pública" en el panel. **Producción: https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscritos**
+
+Notas técnicas del commit `0b1b979`:
+- Se eliminó la duplicidad de rutas: la página vieja `src/app/eventos/[slug]/inscritos/page.tsx` (sin grupo) chocaba con la nueva en `(main)` → se reemplazó el contenido de la original y se borró el duplicado.
+- La DB local quedó sincronizada con `prisma db push` (runnerId nullable) — producción no se tocó.
+- Las 2 inscripciones reales en producción (bib 2 FUNDACION VENEZUELABIKE y bib 3 NATHALIE MORENO) están ahora APPROVED/Confirmado.
+
+== TAREA ANTERIOR (COMPLETADA) ==
+**EXPERIENCIA DE INSCRIPCIÓN 2.0** (commit `ee345c3`, verificado en producción 2026-11-25):
 
 Pedido del usuario (con captura del recibo de NATHALIE MORENO):
 1. "En este recibo que salga TODO: categoría, talla de franela, todo" → RECIBO COMPLETO en 4 secciones con dorsal provisional, desglose USD+Bs+tasa BCV y botón Imprimir.
@@ -60,8 +73,10 @@ Causas raíz encontradas y corregidas:
 == SIGUIENTE PASO ==
 1. Panel admin ágil (fase 2): vista pendientes por defecto, motivo de rechazo, email al aprobar/rechazar, acciones masivas, export solo aprobados
 2. Feedback pendiente de la sección Monitor Live (`1b9a1e4`)
-3. (Resuelto en `ee345c3`): recibo completo, categoría automática bloqueada, datos precargados por cédula y edición de perfil
-4. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
+3. (Resuelto en `0b1b979`): cupos en vivo, Excel general con todos los campos, lista pública por evento sin PII, ChuckScore reparado, filtro por categoría del panel
+4. (Resuelto en `ee345c3`): recibo completo, categoría automática bloqueada, datos precargados por cédula y edición de perfil
+5. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
+6. PII restante: `/api/registrations/lookup` sin auth devuelve email/teléfono/DOB; `GET /api/registrations` vuelca paymentRef
 
 == PROTOCOLO DE TRABAJO ==
 1. Cada cambio → commit atómico + git push origin main
@@ -116,6 +131,7 @@ git push origin main
 | Sitio público | https://vzlabike-and-run.vercel.app |
 | Admin login | https://vzlabike-and-run.vercel.app/admin/login |
 | Eventos públicos | https://vzlabike-and-run.vercel.app/eventos |
+| Lista pública de inscritos (ejemplo) | https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscritos |
 | GitHub repo | https://github.com/SEBASMTB/vzlabike-and-run |
 | Vercel dashboard | https://vercel.com/venezuelabike-9338s-projects/vzlabike-and-run |
 | Turso dashboard | https://app.turso.tech/vbrresult |

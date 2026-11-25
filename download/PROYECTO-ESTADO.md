@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `ee345c3`)  
+> Última actualización: 2026-11-25 (commit `0b1b979`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -45,6 +45,11 @@
 - [x] `/eventos` — Listado público con filtros por deporte y buscador
   - [x] Hero con imagen profesional multi-disciplina (ciclismo de ruta, triatlón, calle, trekking) — commit `0bfe73a`
 - [x] `/eventos/[slug]` — Detalle de evento individual
+  - [x] **Cupos disponibles en vivo** — muestra `maxParticipants − inscritos reales` con barra de progreso (antes quedaba clavado en "500 de 500"); enlace **"Ver lista de inscritos (N)"** — commit `0b1b979`
+- [x] `/eventos/[slug]/inscritos` — **Lista pública de inscritos por evento (para publicar)** — commit `0b1b979`
+  - Hero con evento + 4 stats (inscritos/confirmados/pendientes/cupos libres), buscador (nombre, dorsal, categoría, equipo, ciudad), botón imprimir, tabla Dorsal | Nombre | Categoría | Equipo | Ciudad | Estado (Confirmado/Pendiente) y CTA de inscripción
+  - Datos seguros: NUNCA expone cédula, fecha de nacimiento ni contactos (corrige la fuga PII de la versión anterior); las inscripciones REJECTED no se publican
+  - Endpoint: `GET /api/events/[slug]/participantes` (público, caché 30s)
 - [x] **Sección Monitor Live** (`/#monitor-live`) — nueva en la landing entre Servicios y Plataforma: foto real del monitor del evento (Santa Ana Corre 10K) en bisel de monitor con animación Ken Burns ligera (solo transform/GPU, 26s, desactivada con `prefers-reduced-motion`), badge EN VIVO con pulso, 4 beneficios y CTAs (resultados online + solicitar servicio) — commit `1b9a1e4`
 - [x] `/eventos/[slug]/inscribirse` — Página de inscripción
 - [x] `/tienda` — Tienda de productos
@@ -65,7 +70,10 @@
 - [x] Gestión de inscripciones (aprobar/rechazar)
 - [x] Gestión de tienda (productos CRUD)
 - [x] Gestión de pedidos
-- [x] Exportación Excel ChuckScore
+- [x] **Exportación Excel general** — botón "Exportar Excel (.xlsx)" en Inscripciones con 26 columnas (dorsal, cédula, nombre, género, f. nacimiento, categoría, equipo, talla franela, camiseta, contactos, emergencia con parentesco, método/referencia, montos USD/Bs, tasa BCV, evento, fecha, estado, waiver); respeta los filtros activos del panel (evento/estado/categoría/búsqueda); funciona con o sin evento seleccionado — commit `0b1b979`
+- [x] Exportación Excel ChuckScore — **reparada** (el include Prisma `category` no existe → 500; reescrita con raw SQL + JOINs) — commit `0b1b979`
+- [x] Botón **"Lista pública"** — abre `/eventos/[slug]/inscritos` del evento filtrado para compartir/publicar — commit `0b1b979`
+- [x] Filtro por categoría del panel ahora realmente filtra (la API ignoraba `categoryId`) — commit `0b1b979`
 
 ### 🗄️ Base de datos
 - [x] Turso configurado y conectado en producción
@@ -166,6 +174,8 @@
 | 14 | ~~El recibo solo mostraba 4 campos (sin talla, sin datos de contacto, sin desglose de pago)~~ | ✅ **Resuelto** (commit `ee345c3`) | Recibo en 4 secciones (evento / participante / inscripción / pago) con dorsal provisional, desglose USD+Bs+tasa BCV, método, referencia y botón "Imprimir comprobante" (header/footer ocultos al imprimir). Verificado E2E local (13/13 campos) |
 | 15 | ~~La categoría se podía elegir manualmente (el usuario quiere asignación automática)~~ | ✅ **Resuelto** (commit `ee345c3`) | Paso 3 sin selector: card bloqueada "Asignada automáticamente" que se recalcula sola al cambiar fecha de nacimiento o género; caso sin categoría muestra aviso claro |
 | 16 | ~~El corredor repetidor tenía que llenar todo de nuevo (prefill nunca funcionaba: `runner={null}` fijo)~~ | ✅ **Resuelto** (commit `ee345c3`) | `GET /api/runners/lookup?cedula=` (exacto + fallback por sufijo numérico, rate-limited, sin ficha médica) precarga perfil al escribir la cédula (debounce 600ms) con banner "¡Bienvenido(a) de vuelta!"; campos editables siempre (req. de modificación de datos). Runner upsert guarda ahora también `tallaFranela` + contacto de emergencia. Verificado en producción con NATHALIE MORENO (9479255) |
+| 17 | ~~"Cupos disponibles" siempre mostraba el máximo (2 inscripciones reales y seguía "500 de 500")~~ | ✅ **Resuelto** (commit `0b1b979`) | Causa: la página de detalle forzaba `registrationCount: 0` y el API del evento no devolvía el conteo. Ahora `/api/events/[slug]` expone `registrationCount` real (COUNT en BD), `/api/events` suma COUNT por evento y el cliente usa el valor real. **Verificado en producción**: LA RUTA DE LA CAMPAÑA ADMIRABLE muestra "498 de 500" con 2 inscritos y "Participantes 2 / 500" |
+| 18 | ~~Sin opción de descargar Excel del listado (solo ChuckScore, y roto con 500 por `include: { category: true }` — la relación se llama `categoryRef`)~~ | ✅ **Resuelto** (commit `0b1b979`) | Nuevo `GET /api/admin/export/inscripciones` (ExcelJS, 26 columnas, mismos filtros del panel, auth). ChuckScore reescrito con raw SQL + JOINs (Runner/Category) — descarga verificada en producción (bib 2 y 3 con datos completos) |
 | 9 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
 | 10 | PUT/DELETE admin usan interpolación de strings con escape `''` (commits `5491ae8`/`06dc196` — libSQL no soporta params) | ⚠️ Aceptable | SQLite escapa comillas dobladas y las columnas van con allowlist. Refactorizar a params si el adaptador llega a soportarlos |
 
@@ -183,9 +193,9 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 2. ~~**Montos y tasa BCV se descartan**~~ **RESUELTO (`260114f`)**: `totalAmount`, `totalAmountBs` y `bcvRate` se guardan con la inscripción (además de estado, ciudad y contacto de emergencia con parentesco).
 3. ~~Categorías: 4 fuentes en conflicto~~ **RESUELTO (`1fde98d`)**: fuente única = `Category` (Prisma); endpoint público lee Category con fallback estándar del deporte; `openCategories` eliminado; `EventCategory`/`CategoryManager` eliminados; inscripciones guardan categoryId + snapshot texto
 4. **Estados inconsistentes**: "pending" minúscula (register) vs "PENDING" (schema) vs "confirmed" legacy (stats/dashboard) → badges sin color, filtros confusos.
-5. **Admin inscripciones**: filtro por categoría roto (UI lo envía, API lo ignora), búsqueda por dorsal no existe (placeholder lo promete), sin motivo de rechazo, sin email al aprobar/rechazar, dorsal se asigna al crear (debería ser al aprobar), export ChuckScore incluye PENDING, sin acciones masivas.
+5. ~~**Admin inscripciones**: filtro por categoría roto (UI lo envía, API lo ignora)~~ **RESUELTO (`0b1b979`)** — resto: búsqueda por dorsal ya existe (`257e4da`), sin motivo de rechazo, sin email al aprobar/rechazar, dorsal se asigna al crear (debería ser al aprobar), export ChuckScore incluye PENDING, sin acciones masivas.
 6. **Código muerto**: `/api/register` (el único endpoint alineado al schema — irónico), `/api/eligibility`, `RegistrationDialog` + `GroupRegistrationDialog` (vivos en la home, llaman al endpoint roto, taxonomía de pago distinta), `CategoryManager`, `InscribirsePage.tsx`.
-7. **PII pública**: `/eventos/[slug]/inscritos` publica cédula+fecha de nacimiento; `/api/registrations/lookup` sin auth devuelve email/teléfono/DOB por cédula; `GET /api/registrations` vuelca todo incl. paymentRef.
+7. **PII pública**: ~~`/eventos/[slug]/inscritos` publica cédula+fecha de nacimiento~~ **RESUELTO (`0b1b979`)**: la lista pública fue reescrita sobre `/api/events/[slug]/participantes` (dorsal, nombre, categoría, equipo, ciudad, estado — sin cédula ni DOB ni contactos; REJECTED ocultas). ~~`/api/registrations/lookup` sin auth devuelve email/teléfono/DOB por cédula~~; `GET /api/registrations` vuelca todo incl. paymentRef — **pendiente aún**
 8. **Datos de destino de pago no se muestran**: los IDs/cuentas (Binance/Zelle/pago móvil) solo existen hardcodeados en el diálogo legacy → el atleta no sabe a dónde pagar.
 9. **BCV frágil**: API no oficial + fallback hardcode 145.50; tasa no se congela en la inscripción.
 10. Dorsal duplicable (count+1 sin transacción ni unique); grupo "en transacción" que no lo es (loop de creates).
@@ -202,7 +212,9 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+0b1b979 feat(cupos,excel,lista): conteo real de inscritos en vivo, exportacion Excel completa y lista publica por evento
 ee345c3 feat(inscripcion): categoria automatica bloqueada, datos del corredor precargados por cedula y recibo completo con impresion
+a2ddab3 chore: script de verificacion visual del wizard en produccion
 257e4da fix(admin): listado inscripciones devuelve objetos category/event/runner + busqueda por dorsal
 1b48d5a feat(admin): eliminar inscripciones - endpoint DELETE con auth + boton con confirmacion en el panel
 260114f fix: validacion en vivo de fecha de nacimiento + persistencia completa de inscripcion en BD
@@ -237,7 +249,14 @@ bf33f93 config: Activar Turso como base de datos de produccion
 
 ### 0.0b ~~Borrar inscripción de prueba (cédula 99000001)~~ ✅ **HECHO (2026-11-25, `1b48d5a`)**: eliminada en producción vía el nuevo endpoint DELETE (HTTP 200). **Nota:** quedan 2 inscripciones reales: NATHALIE MORENO (bib 3, Máster B Femenino 40+, pending, con comprobante) y FUNDACION VENEZUELABIKE (bib 2, Máster C Masculino 50-59, pending) — borrar esta última desde el panel solo si era de prueba.
 
-### 0.1 Continuar con el rediseño del flujo de inscripciones/pagos (fases 1-2 y 4 restantes — esperar OK del usuario; Fase 3 ya resuelta en `1fde98d`)
+### 0.0c ~~Cupos no decrementan + Excel del listado + lista pública por evento~~ ✅ **HECHO Y VERIFICADO EN PRODUCCIÓN (2026-11-25, `0b1b979`)**:
+- Cupos: LA RUTA DE LA CAMPAÑA ADMIRABLE muestra "498 de 500" y "Participantes 2 / 500" con las 2 inscripciones reales
+- Excel general: `GET /api/admin/export/inscripciones` descarga 26 columnas con bib 2 (FUNDACION VENEZUELABIKE) y bib 3 (NATHALIE MORENO) — ambos ahora APPROVED/Confirmado
+- ChuckScore reparado y verificado en producción (7215 bytes, 13 columnas estándar)
+- Lista pública: https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscritos (stats, buscador, imprimir, sin PII)
+- Panel: botones "Lista pública", "ChuckScore (.xlsx)" y "Exportar Excel (.xlsx)" verificados en producción
+
+### 0.1 Continuar con el rediseño del flujo de inscripciones/pagos (fases 1-2 y 4 restantes — esperar OK del usuario; Fase 3 ya resuelta en `1fde98d`; parte de la Fase 4 —PII de inscritos— resuelta en `0b1b979`)
 
 ### 1. Re-subir la imagen del evento MISS desde el panel (perdida en el incidente del 2026-11-10)
 
