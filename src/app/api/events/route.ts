@@ -11,6 +11,13 @@ import {
 
 export { invalidateEventsCache };
 
+/** Serializa BigInt (COUNT(*) del adaptador libSQL) a Number para JSON */
+function stringifySafe(value: unknown): string {
+  return JSON.stringify(value, (_k, v) =>
+    typeof v === "bigint" ? Number(v) : v
+  );
+}
+
 export async function GET(request: NextRequest) {
   try {
     // ?fresh=1 → admin/internal consumers: bypass in-memory cache AND edge cache
@@ -29,7 +36,7 @@ export async function GET(request: NextRequest) {
          FROM Event
          ORDER BY date ASC`
       );
-      return new NextResponse(JSON.stringify(events), {
+      return new NextResponse(stringifySafe(events), {
         headers: {
           "Content-Type": "application/json",
           "Cache-Control": "no-store, must-revalidate",
@@ -63,7 +70,7 @@ export async function GET(request: NextRequest) {
        ORDER BY date ASC`
     );
 
-    const data = JSON.stringify(events);
+    const data = stringifySafe(events);
 
     // Store in cache
     setEventsCache(data, now);
