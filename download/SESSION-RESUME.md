@@ -25,13 +25,20 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-**MEJORAS DEL PANEL ADMIN** (commits `1b48d5a` + `257e4da`, deployados y verificados en producción 2026-11-25):
+**EXPERIENCIA DE INSCRIPCIÓN 2.0** (commit `ee345c3`, deployado y verificado en producción 2026-11-25):
 
-- **Eliminar inscripciones**: nuevo `DELETE /api/admin/registrations/[id]` con `requireAuth` (404 si no existe) + botón papelera en cada fila del panel (`/admin/inscripciones`) con AlertDialog de confirmación. Se usó para borrar en producción la inscripción de prueba PRUEBA VERIFICACION-VBR (cédula 99000001) — HTTP 200, verificado.
-- **Listado admin normalizado**: la API (`GET /api/admin/registrations`) ahora devuelve objetos `category`, `event` y `runner` (sintetizado desde los campos planos/legacy + snapshot ciudad/estado/emergencia/club). Antes las columnas Categoría y Evento mostraban "—".
-- **Búsqueda por dorsal**: el buscador del panel ahora también filtra por `bibNumber` (`CAST(bibNumber AS TEXT) LIKE`), como lo prometía el placeholder.
+Pedido del usuario (con captura del recibo de NATHALIE MORENO):
+1. "En este recibo que salga TODO: categoría, talla de franela, todo" → RECIBO COMPLETO en 4 secciones con dorsal provisional, desglose USD+Bs+tasa BCV y botón Imprimir.
+2. "Al colocar la fecha de nacimiento automáticamente se despliegue la categoría según la edad, NO queremos darle a elegir" → PASO 3 SIN SELECTOR: card bloqueada "Asignada automáticamente" recalculada al vuelo (edad+género); aviso claro si no hay categoría compatible.
+3. "Si ese corredor vuelve a inscribirse sus datos queden guardados para no llenar un formulario nuevamente" → `GET /api/runners/lookup?cedula=` precarga el perfil (nombres, contacto, ciudad, club, talla, emergencia) al escribir la cédula, con banner "¡Bienvenido(a) de vuelta!".
+4. "Darle una opción para modificar los datos por si cambia teléfono, dirección, etc." → los campos precargados quedan SIEMPRE editables; al inscribir, el upsert del Runner actualiza el perfil con lo nuevo (y ahora también guarda talla de franela + contacto de emergencia).
 
-Reporte del usuario: (1) creó evento con fecha 14/02/2027 y la inscripción mostraba 13 de febrero; (2) al marcar la fecha de nacimiento no se asignaba categoría y el paso 3 no dejaba avanzar ("Este evento no tiene categorías definidas"); (3) pidió diseñar hacia trabajo consistente con base de datos. → RESUELTO en `1fde98d`/`260114f` (ver abajo). El usuario confirmó con captura: inscripción de NATHALIE MORENO registrada E2E con éxito (Máster B Femenino 40+, $65 / Bs. 9.457,50, PENDIENTE).
+Verificación:
+- E2E API local: e2e-registro-categorias 15/15 PASS + e2e-runners-lookup.mjs 9/9 PASS (nuevo).
+- Recorrido visual completo local (scripts/browser-e2e.sh): banner → prefill → categoría bloqueada ("Sub-Máster Varones 30-39, Asignada automáticamente") → recibo con 13/13 campos.
+- Producción: lookup encuentra a NATHALIE MORENO (9479255, con y sin prefijo V-); wizard real muestra el banner y precarga Mérida/VzlaBike and Run Team; el resumen muestra la categoría auto-asignada.
+
+Reporte anterior: flujo de inscripción roto (fecha off-by-one, categorías 500, sin persistencia) → RESUELTO en `1fde98d`/`260114f`.
 
 Causas raíz encontradas y corregidas:
 - **Fecha off-by-one**: se guardaba medianoche UTC y se mostraba con zona local (UTC-4). Ahora: `src/lib/date-utils.ts` formatea SIEMPRE en UTC y date-only se guarda al mediodía UTC (POST/PUT eventos). Barrido UTC en ~12 archivos (EventCard, wizard, OrderSummary, waiver, emails, admin…).
@@ -51,9 +58,9 @@ Causas raíz encontradas y corregidas:
 **VERIFICACIÓN EN PRODUCCIÓN (2026-11-25)**: evento `la-ruta-de-la-campana-admirable` → header "domingo, 14 de febrero de 2027"; 16 categorías desde BD (`source: db`); wizard paso 3 con "Tu edad: 57 años", 8 elegibles y **Máster C Masculino (50-59) auto-asignada**; POST de prueba HTTP 201 con `runnerId`+`categoryId`+montos persistidos; fecha futura → 400. ⚠️ Quedó 1 inscripción de prueba en producción (PRUEBA VERIFICACION-VBR, cédula 99000001, bib 1) — borrarla desde el panel admin.
 
 == SIGUIENTE PASO ==
-1. ~~Borrar la inscripción de prueba (cédula 99000001)~~ ✅ ELIMINADA en producción (2026-11-25, vía el nuevo DELETE). Quedan 2 inscripciones reales (NATHALIE MORENO bib 3 y FUNDACION VENEZUELABIKE bib 2, ambas PENDING) — decidir si la 2a era prueba y borrarla desde el panel
+1. Panel admin ágil (fase 2): vista pendientes por defecto, motivo de rechazo, email al aprobar/rechazar, acciones masivas, export solo aprobados
 2. Feedback pendiente de la sección Monitor Live (`1b9a1e4`)
-3. Rediseño del flujo de inscripción/pagos (fases 2 y 4 restantes, esperando OK del usuario; persistencia, categorías y eliminación en panel ya hechas)
+3. (Resuelto en `ee345c3`): recibo completo, categoría automática bloqueada, datos precargados por cédula y edición de perfil
 4. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
 
 == PROTOCOLO DE TRABAJO ==

@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commits `1b48d5a` + `257e4da`)  
+> Última actualización: 2026-11-25 (commit `ee345c3`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -163,6 +163,9 @@
 | 11 | ~~Fecha de nacimiento absurda (p. ej. año 2027 → edad "-1 años") sin aviso en vivo~~ | ✅ **Resuelto** (commit `260114f`) | Error bajo "Edad calculada" al instante (futura, <5, >100), borde rojo, `max=hoy` en el input; validación server-side espejo (400) |
 | 12 | ~~Panel admin sin poder eliminar inscripciones (la prueba quedaba pegada para siempre)~~ | ✅ **Resuelto** (commit `1b48d5a`) | `DELETE /api/admin/registrations/[id]` con auth (404 si no existe) + botón papelera en el panel con AlertDialog de confirmación. Verificado en producción: borró la inscripción de prueba 99000001 (HTTP 200) |
 | 13 | ~~Listado admin mostraba "—" en Categoría y Evento (API plana vs UI objetos) y búsqueda por dorsal no existía~~ | ✅ **Resuelto** (commit `257e4da`) | La API normaliza cada fila a objetos `category`/`event`/`runner` (runner sintetizado desde campos planos + snapshot ciudad/estado/emergencia); búsqueda incluye `CAST(bibNumber AS TEXT)`. Verificado en producción |
+| 14 | ~~El recibo solo mostraba 4 campos (sin talla, sin datos de contacto, sin desglose de pago)~~ | ✅ **Resuelto** (commit `ee345c3`) | Recibo en 4 secciones (evento / participante / inscripción / pago) con dorsal provisional, desglose USD+Bs+tasa BCV, método, referencia y botón "Imprimir comprobante" (header/footer ocultos al imprimir). Verificado E2E local (13/13 campos) |
+| 15 | ~~La categoría se podía elegir manualmente (el usuario quiere asignación automática)~~ | ✅ **Resuelto** (commit `ee345c3`) | Paso 3 sin selector: card bloqueada "Asignada automáticamente" que se recalcula sola al cambiar fecha de nacimiento o género; caso sin categoría muestra aviso claro |
+| 16 | ~~El corredor repetidor tenía que llenar todo de nuevo (prefill nunca funcionaba: `runner={null}` fijo)~~ | ✅ **Resuelto** (commit `ee345c3`) | `GET /api/runners/lookup?cedula=` (exacto + fallback por sufijo numérico, rate-limited, sin ficha médica) precarga perfil al escribir la cédula (debounce 600ms) con banner "¡Bienvenido(a) de vuelta!"; campos editables siempre (req. de modificación de datos). Runner upsert guarda ahora también `tallaFranela` + contacto de emergencia. Verificado en producción con NATHALIE MORENO (9479255) |
 | 9 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
 | 10 | PUT/DELETE admin usan interpolación de strings con escape `''` (commits `5491ae8`/`06dc196` — libSQL no soporta params) | ⚠️ Aceptable | SQLite escapa comillas dobladas y las columnas van con allowlist. Refactorizar a params si el adaptador llega a soportarlos |
 
@@ -199,6 +202,7 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+ee345c3 feat(inscripcion): categoria automatica bloqueada, datos del corredor precargados por cedula y recibo completo con impresion
 257e4da fix(admin): listado inscripciones devuelve objetos category/event/runner + busqueda por dorsal
 1b48d5a feat(admin): eliminar inscripciones - endpoint DELETE con auth + boton con confirmacion en el panel
 260114f fix: validacion en vivo de fecha de nacimiento + persistencia completa de inscripcion en BD
