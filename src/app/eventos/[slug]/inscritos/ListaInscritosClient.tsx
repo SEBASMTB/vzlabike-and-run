@@ -56,6 +56,7 @@ interface Stats {
 
 interface Participante {
   bib: number | null;
+  caja: string;
   firstName: string;
   lastName: string;
   category: string;
@@ -268,6 +269,7 @@ export function ListaInscritosClient({ slug }: { slug: string }) {
                         <Hash className="size-3.5" /> Dorsal
                       </span>
                     </TableHead>
+                    <TableHead className="text-xs hidden xl:table-cell">Caja</TableHead>
                     <TableHead className="text-xs">Nombre</TableHead>
                     <TableHead className="text-xs hidden sm:table-cell">
                       <span className="inline-flex items-center gap-1">
@@ -287,7 +289,7 @@ export function ListaInscritosClient({ slug }: { slug: string }) {
                   {filtered.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={6}
+                        colSpan={7}
                         className="text-center py-12 text-muted-foreground"
                       >
                         {data.participants.length === 0
@@ -300,6 +302,9 @@ export function ListaInscritosClient({ slug }: { slug: string }) {
                       <TableRow key={`${p.bib ?? "s"}-${idx}`}>
                         <TableCell className="font-mono text-sm font-bold text-red-600">
                           {p.bib != null ? p.bib : "—"}
+                        </TableCell>
+                        <TableCell className="hidden xl:table-cell text-xs text-muted-foreground whitespace-nowrap">
+                          {p.caja || "—"}
                         </TableCell>
                         <TableCell className="font-medium text-sm">
                           {`${p.firstName} ${p.lastName}`.trim() || "—"}

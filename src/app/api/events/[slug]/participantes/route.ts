@@ -49,6 +49,7 @@ export async function GET(
       select: {
         id: true,
         bibNumber: true,
+        bibBoxLabel: true,
         firstName: true,
         lastName: true,
         category: true,
@@ -83,6 +84,7 @@ export async function GET(
     const participants = regs
       .map((r) => ({
         bib: r.bibNumber,
+        caja: r.bibBoxLabel || "",
         firstName: r.firstName || "",
         lastName: r.lastName || "",
         category: (r.categoryId && catNames.get(r.categoryId)) || r.category || "",

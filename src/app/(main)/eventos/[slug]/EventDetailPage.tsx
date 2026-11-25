@@ -22,6 +22,7 @@ import {
   Gift,
   Timer,
   ScrollText,
+  FileText,
   Droplets,
   Apple,
   Car,
@@ -44,7 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { CountdownTimer } from "@/components/CountdownTimer";
-import { RegistrationDialog } from "@/components/RegistrationDialog";
+import { BibLookupWidget } from "@/components/BibLookupWidget";
 import { SponsorsCarousel } from "@/components/SponsorsCarousel";
 import { Header } from "@/components/Header";
 import { Footer } from "@/components/Footer";
@@ -311,7 +312,6 @@ const item = {
 // ============================================================
 
 export function EventDetailPage({ event, categories }: EventDetailPageProps) {
-  const [dialogOpen, setDialogOpen] = useState(false);
   const spotsLeft = event.maxParticipants - event.registrationCount;
 
   const kitItems = useMemo(() => (event.kitInfo ? parseKitItems(event.kitInfo) : []), [event.kitInfo]);
@@ -1023,6 +1023,11 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
                         <Users className="size-3.5" />
                         Ver lista de inscritos ({event.registrationCount})
                       </Link>
+
+                      {/* Consulta de dorsal + caja de retiro */}
+                      <div className="mt-3">
+                        <BibLookupWidget slug={event.slug} />
+                      </div>
                     </div>
 
                     <Separator />
@@ -1075,33 +1080,6 @@ export function EventDetailPage({ event, categories }: EventDetailPageProps) {
       {/* Footer — mismo que la página principal */}
       <Footer />
       <WhatsAppButton />
-
-      {/* Registration Dialog */}
-      <RegistrationDialog
-        event={{
-          id: event.id,
-          slug: event.slug,
-          title: event.title,
-          description: event.description,
-          date: event.date,
-          location: event.location,
-          distance: event.distance,
-          category: event.category,
-          imageUrl: event.bannerImage || event.imageUrl,
-          price: event.price,
-          priceBs: event.priceBs,
-          featured: event.featured,
-          sportType: event.sportType || "running",
-          ageCalcMode: event.ageCalcMode || "calendar_year",
-          hasShirt: event.hasShirt,
-          categories: event.categories,
-        }}
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        eventData={{
-          organizer: event.organizer,
-        }}
-      />
     </div>
   );
 }
