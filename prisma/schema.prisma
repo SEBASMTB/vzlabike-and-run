@@ -84,6 +84,15 @@ model Event {
   priceBs        Float   @default(0)
   maxParticipants Int    @default(500)
 
+  // --- Datos de destino de pago (Paso 3 del wizard, configurables por evento) ---
+  // JSON array: [{ method: 'movil'|'transferencia'|'zelle'|'binance'|'divisas'|'otro',
+  //               label, banco, telefono, cedula, correo, wallet, notas }]
+  paymentAccounts String @default("[]")
+
+  // --- Cajas físicas de entrega de kits (tamaño del bloque: 100 o 150) ---
+  // Dorsal 5 con caja 100 → "Caja 1–99"; dorsal 150 con caja 100 → "Caja 100–199"
+  bibBoxSize     Int     @default(100)
+
   // --- Requisitos ---
   requiresFederationLicense Boolean @default(false)
 
@@ -108,6 +117,7 @@ model Event {
   registrations Registration[]
   categoryList  Category[]
   products      Product[]
+  paymentRecords PaymentRecord[]
 }
 
 /// Categoría de Competencia — Normalizada con rangos de edad y género
@@ -126,6 +136,10 @@ model Category {
 
   // --- Precio ---
   price    Float   @default(0)  // Precio de inscripción para esta categoría
+
+  // --- Lote de dorsales (asignación al aprobar, primer número libre del rango) ---
+  bibStart Int?  // Dorsal inicial del lote (incluido)
+  bibEnd   Int?  // Dorsal final del lote (incluido)
 
   // --- Relaciones ---
   registrations Registration[]
@@ -176,10 +190,12 @@ model Registration {
   totalAmount     Float   @default(0)    // Total en USD
   totalAmountBs   Float   @default(0)    // Total en Bolívares
   bcvRate         Float   @default(0)    // Tasa BCV al momento del pago
-  paymentMethod   String  @default("")   // transferencia | movíl | divisas | zelle
+  paymentMethod   String  @default("")   // transferencia | movil | divisas | zelle | binance
   paymentRef      String  @default("")
   paymentProofUrl String? // URL del comprobante de pago (imagen)
-  status          String  @default("PENDING") // PENDING, APPROVED, REJECTED
+  status          String  @default("PENDING") // PENDING, APPROVED, REJECTED (únicos)
+  rejectReason    String  @default("")   // Motivo obligatorio cuando status = REJECTED
+  bibBoxLabel     String  @default("")   // Caja física asignada al aprobar (ej. "Caja 1–99")
 
   // --- Legal ---
   waiverAccepted Boolean @default(false) // Aceptación de responsabilidad
@@ -202,6 +218,37 @@ model Registration {
   @@index([eventId])
   @@index([runnerId])
   @@index([categoryId])
+  @@index([status])
+}
+
+/// Pago sin Ficha — Transferencia/Pago Móvil detectado en el banco que aún no
+/// tiene inscripción asociada. Bandeja de conciliación bancaria del panel admin.
+/// Al entrar una inscripción con la misma referencia (por evento) se marca
+/// MATCHED y el admin aprueba con un clic (dorsal + caja asignados).
+model PaymentRecord {
+  id        String   @id @default(cuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  eventId   String? // Opcional: puede registrarse sin evento y asignarse luego
+  event     Event?  @relation(fields: [eventId], references: [id])
+
+  method         String  @default("")  // movil | transferencia | zelle | divisas | binance | otro
+  reference      String  @default("")  // Número de referencia/transferencia
+  amount         Float   @default(0)   // Monto reportado
+  currency       String  @default("Bs") // Bs | USD
+  payerName      String  @default("")  // Titular de la cuenta que pagó
+  payerPhone     String  @default("")
+  bankName       String  @default("")
+  notes          String  @default("")
+
+  // --- Conciliación ---
+  status                String  @default("UNMATCHED") // UNMATCHED | MATCHED | IGNORED
+  matchedRegistrationId String?
+  matchedAt             DateTime?
+
+  @@index([eventId])
+  @@index([reference])
   @@index([status])
 }
 

@@ -357,6 +357,37 @@ CREATE TABLE IF NOT EXISTS "ProductOrder" (
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     FOREIGN KEY ("productId") REFERENCES "Product"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "PaymentRecord" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "eventId" TEXT,
+    "method" TEXT NOT NULL DEFAULT '',
+    "reference" TEXT NOT NULL DEFAULT '',
+    "amount" REAL NOT NULL DEFAULT 0,
+    "currency" TEXT NOT NULL DEFAULT 'Bs',
+    "payerName" TEXT NOT NULL DEFAULT '',
+    "payerPhone" TEXT NOT NULL DEFAULT '',
+    "bankName" TEXT NOT NULL DEFAULT '',
+    "notes" TEXT NOT NULL DEFAULT '',
+    "status" TEXT NOT NULL DEFAULT 'UNMATCHED',
+    "matchedRegistrationId" TEXT,
+    "matchedAt" DATETIME,
+    FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE INDEX IF NOT EXISTS "PaymentRecord_eventId_idx" ON "PaymentRecord"("eventId");
+CREATE INDEX IF NOT EXISTS "PaymentRecord_reference_idx" ON "PaymentRecord"("reference");
+CREATE INDEX IF NOT EXISTS "PaymentRecord_status_idx" ON "PaymentRecord"("status");
+
+-- Unicidad de dorsal por evento (solo filas con dorsal asignado: los PENDING
+-- y REJECTED quedan con NULL y no queman números).
+CREATE UNIQUE INDEX IF NOT EXISTS "Registration_bib_event_unique"
+    ON "Registration"("eventId", "bibNumber") WHERE "bibNumber" IS NOT NULL;
+
+-- Unicidad de referencia de pago por evento (solo cuando hay referencia).
+CREATE UNIQUE INDEX IF NOT EXISTS "Registration_ref_event_unique"
+    ON "Registration"("eventId", "paymentRef") WHERE "paymentRef" != '';
 `;
 
 // ── Expected schema per table (column name → SQLite type for ALTER TABLE) ──
@@ -397,6 +428,10 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     prizesImages: "TEXT NOT NULL DEFAULT '[]'",
     rulesFile: "TEXT NOT NULL DEFAULT ''",
     sponsorsLogos: "TEXT NOT NULL DEFAULT '[]'",
+    // Datos de destino de pago configurables por evento (JSON array)
+    paymentAccounts: "TEXT NOT NULL DEFAULT '[]'",
+    // Tamaño del bloque de cajas físicas de entrega (100 o 150)
+    bibBoxSize: 'INTEGER NOT NULL DEFAULT 100',
     createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
     updatedAt: 'DATETIME NOT NULL',
   },
@@ -443,6 +478,8 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     categoryId: 'TEXT',
     totalAmount: 'REAL NOT NULL DEFAULT 0',
     paymentProofUrl: 'TEXT',
+    rejectReason: "TEXT NOT NULL DEFAULT ''",
+    bibBoxLabel: "TEXT NOT NULL DEFAULT ''",
     updatedAt: 'DATETIME',
   },
   Runner: {
@@ -468,6 +505,19 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     alergiasCondiciones: 'TEXT',
     createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
     updatedAt: 'DATETIME NOT NULL',
+  },
+  Category: {
+    id: 'TEXT NOT NULL PRIMARY KEY',
+    eventId: 'TEXT NOT NULL',
+    name: 'TEXT NOT NULL',
+    minAge: 'INTEGER NOT NULL DEFAULT 0',
+    maxAge: 'INTEGER NOT NULL DEFAULT 99',
+    gender: "TEXT NOT NULL DEFAULT 'MIXTO'",
+    distanceKm: 'REAL',
+    price: 'REAL NOT NULL DEFAULT 0',
+    // Lote de dorsales de la categoría (asignación al aprobar)
+    bibStart: 'INTEGER',
+    bibEnd: 'INTEGER',
   },
   Product: {
     id: 'TEXT NOT NULL PRIMARY KEY',
@@ -505,6 +555,23 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     notes: "TEXT NOT NULL DEFAULT ''",
     createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
   },
+  PaymentRecord: {
+    id: 'TEXT NOT NULL PRIMARY KEY',
+    eventId: 'TEXT',
+    method: "TEXT NOT NULL DEFAULT ''",
+    reference: "TEXT NOT NULL DEFAULT ''",
+    amount: 'REAL NOT NULL DEFAULT 0',
+    currency: "TEXT NOT NULL DEFAULT 'Bs'",
+    payerName: "TEXT NOT NULL DEFAULT ''",
+    payerPhone: "TEXT NOT NULL DEFAULT ''",
+    bankName: "TEXT NOT NULL DEFAULT ''",
+    notes: "TEXT NOT NULL DEFAULT ''",
+    status: "TEXT NOT NULL DEFAULT 'UNMATCHED'",
+    matchedRegistrationId: 'TEXT',
+    matchedAt: 'DATETIME',
+    createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+    updatedAt: 'DATETIME NOT NULL',
+  },
 };
 
 // ── Initialization (single source of truth, runs once) ─────────────────────
@@ -520,14 +587,25 @@ async function initAndSeed(prisma: PrismaClient) {
 
   initPromise = (async () => {
     try {
-      // Step 1: CREATE TABLE IF NOT EXISTS (safe – no-op when table exists)
+      // Step 1: CREATE TABLE IF NOT EXISTS + índices (safe – no-op when exists).
+      // Cada statement lleva su propio catch: un índice único que falle por
+      // datos históricos sucios NO puede tumbar la inicialización completa.
       const statements = CREATE_TABLES_SQL
         .split(';')
         .map((s) => s.trim())
         .filter((s) => s.length > 0);
 
       for (const sql of statements) {
-        await prisma.$executeRawUnsafe(sql);
+        try {
+          await prisma.$executeRawUnsafe(sql);
+        } catch (sqlErr) {
+          console.error(
+            "[DB] DDL no aplicado (se continúa):",
+            String(sqlErr).slice(0, 160),
+            "→",
+            sql.slice(0, 80)
+          );
+        }
       }
 
       // Step 2: Migrate missing columns
@@ -551,6 +629,22 @@ async function initAndSeed(prisma: PrismaClient) {
         } catch {
           // Table might not exist yet
         }
+      }
+
+      // Step 2.5: Normaliza estados históricos a la taxonomía única
+      // PENDING / APPROVED / REJECTED (idempotente, coste ~0 por arranque).
+      try {
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Registration" SET "status" = 'PENDING' WHERE "status" = 'pending'`
+        );
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Registration" SET "status" = 'APPROVED' WHERE "status" IN ('confirmed', 'approved')`
+        );
+        await prisma.$executeRawUnsafe(
+          `UPDATE "Registration" SET "status" = 'REJECTED' WHERE "status" = 'rejected'`
+        );
+      } catch (normErr) {
+        console.error("[DB] Normalización de estados omitida:", normErr);
       }
 
       // Step 3: Seed events ONLY if the table is completely empty
