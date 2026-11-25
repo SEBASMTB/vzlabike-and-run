@@ -88,11 +88,13 @@ export function normalizePaymentRef(ref: string): string {
 
 /**
  * Etiqueta de la caja física que corresponde a un dorsal según el tamaño
- * de bloque del evento: caja 100 → 1–99, 100–199…; caja 150 → 1–149, 150–299…
+ * de bloque del evento (convención del organizador):
+ *   caja 100 → 1–99, 100–199, 200–299…
+ *   caja 150 → 1–149, 150–299, 300–449…
  */
 export function bibBoxLabel(bib: number, boxSize: number): string {
   const size = boxSize > 0 ? boxSize : 100;
   const start = bib < size ? 1 : Math.floor(bib / size) * size;
-  const end = start + size - 1;
+  const end = start === 1 ? size - 1 : start + size - 1;
   return `Caja ${start}–${end}`;
 }
