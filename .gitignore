@@ -61,3 +61,4 @@ corredores_vbr.csv
 *.log
 upload/
 *.bak
+scripts/shots/

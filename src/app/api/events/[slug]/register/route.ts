@@ -220,6 +220,16 @@ export async function POST(
         estado: estado ? String(estado) : null,
         ciudad: ciudad ? String(ciudad) : null,
         team: team ? String(team) : null,
+        tallaFranela: shirtSize ? String(shirtSize) : null,
+        contactoEmergenciaNombre: emergencyContact
+          ? String(emergencyContact).trim()
+          : null,
+        contactoEmergenciaTelefono: emergencyPhone
+          ? String(emergencyPhone).trim()
+          : null,
+        contactoEmergenciaParentesco: emergRelation
+          ? String(emergRelation)
+          : null,
       };
       const existingRunner = await db.runner.findUnique({
         where: { cedula: cedulaNorm },
@@ -237,6 +247,17 @@ export async function POST(
             estado: runnerPayload.estado,
             ciudad: runnerPayload.ciudad,
             team: runnerPayload.team,
+            tallaFranela:
+              runnerPayload.tallaFranela ?? existingRunner.tallaFranela,
+            contactoEmergenciaNombre:
+              runnerPayload.contactoEmergenciaNombre ??
+              existingRunner.contactoEmergenciaNombre,
+            contactoEmergenciaTelefono:
+              runnerPayload.contactoEmergenciaTelefono ??
+              existingRunner.contactoEmergenciaTelefono,
+            contactoEmergenciaParentesco:
+              runnerPayload.contactoEmergenciaParentesco ??
+              existingRunner.contactoEmergenciaParentesco,
           },
         });
         runnerId = existingRunner.id;

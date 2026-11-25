@@ -49,7 +49,6 @@ import {
   Loader2,
   ArrowLeft,
   Pencil,
-  X,
   Lock,
   Smartphone,
   Wallet,
@@ -64,6 +63,8 @@ import {
   Trophy,
   Phone,
   Mail,
+  Printer,
+  UserCheck,
   type LucideIcon,
 } from "lucide-react";
 
@@ -84,18 +85,6 @@ interface RegEvent {
   location: string;
 }
 
-interface RegRunner {
-  id: string;
-  cedula: string;
-  nombres: string;
-  apellidos: string;
-  fechaNacimiento: string;
-  email: string;
-  telefono: string;
-  genero: string;
-  estado: string;
-}
-
 interface RegCategory {
   id: string;
   name: string;
@@ -103,6 +92,24 @@ interface RegCategory {
   minAge: number;
   maxAge: number;
   price: number;
+}
+
+/** Perfil del atleta devuelto por /api/runners/lookup */
+interface RunnerProfile {
+  cedula: string;
+  nombres: string;
+  apellidos: string;
+  fechaNacimiento: string;
+  genero: string;
+  email: string | null;
+  telefono: string | null;
+  estado: string | null;
+  ciudad: string | null;
+  team: string | null;
+  tallaFranela: string | null;
+  contactoEmergenciaNombre: string | null;
+  contactoEmergenciaTelefono: string | null;
+  contactoEmergenciaParentesco: string | null;
 }
 
 interface RegFormData {
@@ -130,7 +137,6 @@ interface RegFormData {
 
 interface RegistrationWizardProps {
   event: RegEvent;
-  runner?: RegRunner | null;
   categories: RegCategory[];
 }
 
@@ -181,6 +187,32 @@ const EMPTY_FORM: RegFormData = {
   paymentRef: "",
   paymentProof: "",
 };
+
+/** Comprobante completo que muestra la pantalla de éxito */
+interface ReceiptData {
+  registrationId?: string;
+  bibNumber?: number | null;
+  categoryName: string;
+  categoryPrice: number;
+  shirtSize: string;
+  shirtExtraUSD: number;
+  totalUSD: number;
+  totalBs: number | null;
+  bcvRate: number | null;
+  paymentMethodLabel: string;
+  paymentRef: string;
+  email: string;
+  telefono: string;
+  fechaNacimiento: string; // DD/MM/YYYY
+  edad: number | null;
+  genero: string;
+  estado: string;
+  ciudad: string;
+  club: string;
+  emergName: string;
+  emergPhone: string;
+  emergRelation: string;
+}
 
 // ============================================================
 // Date helpers
@@ -235,18 +267,54 @@ function calcAge(birth: Date): number {
   return age;
 }
 
-/** Map runner data into form fields */
-function runnerToForm(runner: RegRunner): Partial<RegFormData> {
-  const dob = parseAnyDate(runner.fechaNacimiento);
+/** ISO / cualquier fecha → YYYY-MM-DD sin corrimientos de zona horaria */
+function isoToInputDate(iso: string): string {
+  if (!iso) return "";
+  // Slice directo evita el off-by-one de new Date("...") en UTC-4
+  const m = iso.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return `${m[1]}-${m[2]}-${m[3]}`;
+  const d = parseAnyDate(iso);
+  return d ? toInputDate(d) : "";
+}
+
+/** team del Runner → valores del Select de club del wizard */
+function mapClubToForm(team: string): { club: string; clubOtro: string } {
+  if (!team) return { club: "", clubOtro: "" };
+  if (CLUB_OPCIONES_ESPECIALES.some((c) => c === team))
+    return { club: team, clubOtro: "" };
+  if (CLUBES_VENEZUELA.some((c) => c.nombre === team)) return { club: team, clubOtro: "" };
+  return { club: CLUB_OPCIONES_ESPECIALES[0], clubOtro: team };
+}
+
+/** Perfil guardado del atleta → campos del formulario (editable siempre) */
+function runnerLookupToForm(runner: RunnerProfile): Partial<RegFormData> {
+  const clubMap = mapClubToForm(runner.team || "");
   return {
-    cedula: runner.cedula || "",
     nombres: runner.nombres || "",
     apellidos: runner.apellidos || "",
-    fechaNacimiento: dob ? toInputDate(dob) : "",
+    fechaNacimiento: isoToInputDate(runner.fechaNacimiento || ""),
     email: runner.email || "",
     telefono: runner.telefono || "",
-    genero: runner.genero || "",
-    estado: runner.estado || "",
+    genero:
+      runner.genero === "F" ? "F" : runner.genero === "M" ? "M" : "",
+    estado: ESTADOS_VENEZUELA.some((e) => e.nombre === runner.estado)
+      ? runner.estado || ""
+      : "",
+    ciudad: runner.ciudad || "",
+    emergName: runner.contactoEmergenciaNombre || "",
+    emergPhone: runner.contactoEmergenciaTelefono || "",
+    emergRelation: PARENTESCOS.some(
+      (p) => p === runner.contactoEmergenciaParentesco
+    )
+      ? runner.contactoEmergenciaParentesco || ""
+      : "",
+    club: clubMap.club,
+    clubOtro: clubMap.clubOtro,
+    shirtSize:
+      runner.tallaFranela &&
+      TALLAS_FRANELA.some((t) => t.value === runner.tallaFranela)
+        ? runner.tallaFranela
+        : "",
   };
 }
 
@@ -256,20 +324,18 @@ function runnerToForm(runner: RegRunner): Partial<RegFormData> {
 
 export function RegistrationWizard({
   event,
-  runner,
   categories,
 }: RegistrationWizardProps) {
   const [currentStep, setCurrentStep] = useState<number>(1);
-  const [isEditing, setIsEditing] = useState<boolean>(false);
   const [submitting, setSubmitting] = useState<boolean>(false);
   const [waiverAccepted, setWaiverAccepted] = useState<boolean>(false);
   const [errors, setErrors] = useState<Partial<Record<keyof RegFormData | "waiverAccepted", string>>>({});
-  const [successData, setSuccessData] = useState<{
-    registrationId?: string;
-    categoryName: string;
-    totalUSD: number;
-    totalBs: number | null;
-  } | null>(null);
+  const [successData, setSuccessData] = useState<ReceiptData | null>(null);
+
+  // Datos guardados del atleta (tabla Runner): se cargan al escribir la cédula
+  const [lookupInfo, setLookupInfo] = useState<{ nombre: string } | null>(null);
+  const lookupTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const lastLookupCedula = useRef<string>("");
 
   const [bcvRate, setBcvRate] = useState<number | null>(null);
   const [bcvSource, setBcvSource] = useState<string | null>(null);
@@ -277,17 +343,9 @@ export function RegistrationWizard({
 
   const [formData, setFormData] = useState<RegFormData>({
     ...EMPTY_FORM,
-    registrationType: runner ? "self" : "other",
   });
 
   const { toast } = useToast();
-
-  // Prefill from runner on mount (initial load only)
-  useEffect(() => {
-    if (runner && formData.registrationType === "self") {
-      setFormData((d) => ({ ...d, ...runnerToForm(runner) }));
-    }
-  }, []);
 
   // Fetch BCV rate on mount
   useEffect(() => {
@@ -334,14 +392,45 @@ export function RegistrationWizard({
   );
 
   const handleRegistrationTypeChange = (val: "self" | "other") => {
-    // Reset profile fields, then set new registration type
+    // Reset perfil y estado de búsqueda al cambiar el tipo de inscripción
     setFormData({ ...EMPTY_FORM, registrationType: val });
-    setIsEditing(false);
     setErrors({});
+    setLookupInfo(null);
+    lastLookupCedula.current = "";
+  };
 
-    if (val === "self" && runner) {
-      setFormData((d) => ({ ...d, ...runnerToForm(runner) }));
+  /** Cédula: guarda el valor y busca el perfil guardado del atleta (debounce) */
+  const handleCedulaChange = (value: string) => {
+    update("cedula", value);
+    if (lookupTimer.current) clearTimeout(lookupTimer.current);
+    const trimmed = value.trim();
+    const digits = trimmed.replace(/\D/g, "");
+    if (digits.length < 4) {
+      setLookupInfo(null);
+      return;
     }
+    lookupTimer.current = setTimeout(async () => {
+      const key = trimmed.toUpperCase();
+      if (key === lastLookupCedula.current) return;
+      lastLookupCedula.current = key;
+      try {
+        const res = await fetch(
+          `/api/runners/lookup?cedula=${encodeURIComponent(trimmed)}`
+        );
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data?.found && data.runner) {
+          setFormData((d) => ({ ...d, ...runnerLookupToForm(data.runner) }));
+          setLookupInfo({
+            nombre: `${data.runner.nombres} ${data.runner.apellidos}`.trim(),
+          });
+        } else {
+          setLookupInfo(null);
+        }
+      } catch {
+        // La búsqueda es una mejora: si falla continúa el flujo manual
+      }
+    }, 600);
   };
 
   // ─── Computed ──────────────────────────────────────────────
@@ -408,15 +497,13 @@ export function RegistrationWizard({
     });
   }, [categories, calculatedAge, formData.genero]);
 
-  // Auto-asignar la categoría sugerida en cuanto se conocen edad y género:
-  // el atleta marca su fecha de nacimiento y el sistema selecciona sola la
-  // categoría que corresponde (siempre puede cambiarla manualmente).
-  const autoAssignedRef = useRef(false);
+  // ─── Categoría: asignación automática y bloqueada ────────────────
+  // Al cambiar la fecha de nacimiento o el género, el sistema recalcula y
+  // reasigna solo la categoría que corresponde. El atleta NO la elige.
   useEffect(() => {
     if (!calculatedAge || !formData.genero) return;
-    if (formData.categoryId || autoAssignedRef.current) return;
     if (eligibleCategories.length === 0) return;
-    // Preferir género exacto y el rango de edad más estrecho
+    // Preferir género exacto y el rango de edad más estrecho que contenga la edad
     const exactGender = eligibleCategories.filter(
       (c) => c.gender === formData.genero
     );
@@ -424,8 +511,7 @@ export function RegistrationWizard({
     const best = [...pool].sort(
       (a, b) => a.maxAge - a.minAge - (b.maxAge - b.minAge)
     )[0];
-    if (best) {
-      autoAssignedRef.current = true;
+    if (best && best.id !== formData.categoryId) {
       update("categoryId", best.id);
     }
   }, [calculatedAge, formData.genero, formData.categoryId, eligibleCategories, update]);
@@ -476,7 +562,9 @@ export function RegistrationWizard({
         !formData.clubOtro.trim()
       )
         newErrors.clubOtro = "Especifica el nombre del club";
-      if (!formData.categoryId) newErrors.categoryId = "Selecciona una categoría";
+      if (!formData.categoryId)
+        newErrors.categoryId =
+          "No se pudo asignar una categoría automáticamente — verifica tu fecha de nacimiento y género";
     }
 
     if (step === 4) {
@@ -607,12 +695,34 @@ export function RegistrationWizard({
           (result as Record<string, unknown>).id ||
           (result as Record<string, unknown>).registrationId
         )) || undefined;
+      const regBib =
+        (result && typeof result === "object"
+          ? (result as Record<string, unknown>).bibNumber
+          : undefined) || null;
 
       setSuccessData({
         registrationId: regId ? String(regId) : undefined,
+        bibNumber: typeof regBib === "number" ? regBib : null,
         categoryName: selectedCategory?.name || "",
+        categoryPrice: selectedCategory?.price ?? event.price,
+        shirtSize: showShirtSection ? formData.shirtSize : "",
+        shirtExtraUSD,
         totalUSD,
         totalBs,
+        bcvRate,
+        paymentMethodLabel: selectedPaymentMethod?.label || formData.paymentMethod,
+        paymentRef: formData.paymentRef.trim(),
+        email: formData.email.trim(),
+        telefono: formData.telefono.trim(),
+        fechaNacimiento: dobStr,
+        edad: calculatedAge,
+        genero: formData.genero,
+        estado: formData.estado,
+        ciudad: formData.ciudad.trim(),
+        club: finalTeam || "",
+        emergName: formData.emergName.trim(),
+        emergPhone: formData.emergPhone.trim(),
+        emergRelation: formData.emergRelation,
       });
 
       toast({
@@ -657,42 +767,182 @@ export function RegistrationWizard({
             </div>
 
             <div className="space-y-4 px-6 py-6">
+              {/* ── Datos del evento ── */}
               <div className="rounded-xl bg-gray-50 p-5">
-                <div className="space-y-3">
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Evento</span>
-                    <span className="font-semibold text-gray-900">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                  Datos del evento
+                </p>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Evento</span>
+                    <span className="text-right font-semibold text-gray-900">
                       {event.title}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Participante</span>
-                    <span className="font-semibold text-gray-900">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Fecha</span>
+                    <span className="text-right font-semibold text-gray-900">
+                      {event.date ? formatEventDateLong(event.date) : "Por confirmar"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Lugar</span>
+                    <span className="text-right font-semibold text-gray-900">
+                      {event.location || "Por confirmar"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Datos del participante ── */}
+              <div className="rounded-xl bg-gray-50 p-5">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                  Datos del participante
+                </p>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Nombre</span>
+                    <span className="text-right font-semibold text-gray-900">
                       {participantName || "—"}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Cédula</span>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Cédula</span>
                     <span className="font-semibold text-gray-900">
                       {formData.cedula}
                     </span>
                   </div>
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Categoría</span>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">F. de nacimiento</span>
                     <span className="font-semibold text-gray-900">
-                      {successData.categoryName || "—"}
+                      {successData.fechaNacimiento}
+                      {successData.edad !== null
+                        ? ` (${successData.edad} años)`
+                        : ""}
                     </span>
                   </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Género</span>
+                    <span className="font-semibold text-gray-900">
+                      {successData.genero === "F"
+                        ? "Femenino"
+                        : successData.genero === "M"
+                        ? "Masculino"
+                        : "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Correo</span>
+                    <span className="text-right font-semibold break-all text-gray-900">
+                      {successData.email || "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Teléfono</span>
+                    <span className="font-semibold text-gray-900">
+                      {successData.telefono || "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Lugar de residencia</span>
+                    <span className="text-right font-semibold text-gray-900">
+                      {[successData.ciudad, successData.estado]
+                        .filter(Boolean)
+                        .join(", ") || "—"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Club / Team</span>
+                    <span className="text-right font-semibold text-gray-900">
+                      {successData.club || "Independiente"}
+                    </span>
+                  </div>
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Contacto de emergencia</span>
+                    <span className="text-right font-semibold text-gray-900">
+                      {successData.emergName
+                        ? `${successData.emergName} (${successData.emergPhone})${
+                            successData.emergRelation
+                              ? ` — ${successData.emergRelation}`
+                              : ""
+                          }`
+                        : "—"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* ── Inscripción ── */}
+              <div className="rounded-xl bg-gray-50 p-5">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                  Detalle de la inscripción
+                </p>
+                <div className="space-y-2.5">
+                  <div className="flex items-center justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Categoría</span>
+                    <Badge className="bg-red-50 text-red-700 hover:bg-red-50">
+                      {successData.categoryName || "—"}
+                    </Badge>
+                  </div>
+                  {successData.shirtSize && (
+                    <div className="flex items-center justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-gray-500">Talla de franela</span>
+                      <Badge variant="secondary" className="text-xs">
+                        <Shirt className="mr-1 size-3" /> {successData.shirtSize}
+                        {event.hasShirtOption === "OPTIONAL" &&
+                        successData.shirtExtraUSD > 0
+                          ? ` (+$${successData.shirtExtraUSD.toFixed(2)})`
+                          : event.hasShirtOption === "INCLUDED"
+                          ? " (incluida)"
+                          : ""}
+                      </Badge>
+                    </div>
+                  )}
+                  {successData.bibNumber != null && (
+                    <div className="flex justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-gray-500">Dorsal provisional</span>
+                      <span className="font-mono font-bold text-gray-900">
+                        #{successData.bibNumber}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* ── Pago ── */}
+              <div className="rounded-xl bg-gray-50 p-5">
+                <p className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-red-600">
+                  Resumen de pago
+                </p>
+                <div className="space-y-2.5">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">
+                      Inscripción ({successData.categoryName || "categoría"})
+                    </span>
+                    <span className="font-semibold text-gray-900">
+                      ${successData.categoryPrice.toFixed(2)}
+                    </span>
+                  </div>
+                  {successData.shirtSize && successData.shirtExtraUSD > 0 && (
+                    <div className="flex justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-gray-500">
+                        Franela ({successData.shirtSize})
+                      </span>
+                      <span className="font-semibold text-gray-900">
+                        ${successData.shirtExtraUSD.toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   <Separator className="bg-gray-200" />
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-500">Total USD</span>
+                    <span className="font-semibold text-gray-700">Total USD</span>
                     <span className="font-bold text-red-600">
                       ${successData.totalUSD.toFixed(2)}
                     </span>
                   </div>
                   {successData.totalBs !== null && (
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-500">Total Bs</span>
+                      <span className="font-semibold text-gray-700">Total Bs</span>
                       <span className="font-bold text-gray-900">
                         Bs.{" "}
                         {successData.totalBs.toLocaleString("es-VE", {
@@ -702,20 +952,42 @@ export function RegistrationWizard({
                       </span>
                     </div>
                   )}
-                  {successData.registrationId && (
+                  {successData.bcvRate !== null && (
                     <div className="flex justify-between text-xs">
-                      <span className="text-gray-400">ID</span>
-                      <span className="font-mono text-gray-600">
-                        {successData.registrationId}
+                      <span className="text-gray-400">Tasa BCV aplicada</span>
+                      <span className="text-gray-500">
+                        Bs. {successData.bcvRate.toLocaleString("es-VE", { maximumFractionDigits: 2 })} / USD
                       </span>
                     </div>
                   )}
-                  <div className="flex justify-between text-sm">
+                  <div className="flex justify-between gap-3 text-sm">
+                    <span className="shrink-0 text-gray-500">Método de pago</span>
+                    <span className="font-semibold text-gray-900">
+                      {successData.paymentMethodLabel || "—"}
+                    </span>
+                  </div>
+                  {successData.paymentRef && (
+                    <div className="flex justify-between gap-3 text-sm">
+                      <span className="shrink-0 text-gray-500">Referencia</span>
+                      <span className="font-semibold text-gray-900">
+                        {successData.paymentRef}
+                      </span>
+                    </div>
+                  )}
+                  <div className="flex justify-between items-center text-sm">
                     <span className="text-gray-500">Estado</span>
                     <Badge className="bg-amber-100 text-amber-700 hover:bg-amber-100">
                       PENDIENTE
                     </Badge>
                   </div>
+                  {successData.registrationId && (
+                    <div className="flex justify-between gap-3 text-xs">
+                      <span className="text-gray-400">ID de inscripción</span>
+                      <span className="font-mono text-gray-600">
+                        {successData.registrationId}
+                      </span>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -725,6 +997,13 @@ export function RegistrationWizard({
               </p>
 
               <div className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+                <Button
+                  variant="outline"
+                  className="w-full gap-2 sm:w-auto"
+                  onClick={() => window.print()}
+                >
+                  <Printer className="size-4" /> Imprimir comprobante
+                </Button>
                 <Link href={`/eventos/${event.slug}`}>
                   <Button variant="outline" className="w-full gap-2 sm:w-auto">
                     <ArrowLeft className="size-4" /> Volver al evento
@@ -816,13 +1095,12 @@ export function RegistrationWizard({
                     {currentStep === 1 &&
                       renderStep1({
                         formData,
-                        runner,
-                        isEditing,
+                        lookupInfo,
                         calculatedAge,
                         birthDateIssue,
                         errors,
                         update,
-                        setIsEditing,
+                        handleCedulaChange,
                         handleRegistrationTypeChange,
                       })}
                     {currentStep === 2 &&
@@ -832,8 +1110,7 @@ export function RegistrationWizard({
                         formData,
                         errors,
                         update,
-                        categories,
-                        eligibleCategories,
+                        selectedCategory,
                         calculatedAge,
                       })}
                     {currentStep === 4 &&
@@ -1023,31 +1300,26 @@ function RequiredMark() {
 
 interface Step1Props {
   formData: RegFormData;
-  runner: RegRunner | null | undefined;
-  isEditing: boolean;
+  lookupInfo: { nombre: string } | null;
   calculatedAge: number | null;
   birthDateIssue: string | null;
   errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
   update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
-  setIsEditing: (v: boolean) => void;
+  handleCedulaChange: (value: string) => void;
   handleRegistrationTypeChange: (val: "self" | "other") => void;
 }
 
 function renderStep1({
   formData,
-  runner,
-  isEditing,
+  lookupInfo,
   calculatedAge,
   birthDateIssue,
   errors,
   update,
-  setIsEditing,
+  handleCedulaChange,
   handleRegistrationTypeChange,
 }: Step1Props) {
   const selfMode = formData.registrationType === "self";
-  // Only disable fields when there IS a runner profile and user hasn't clicked "Editar"
-  // If no runner profile, fields must be editable so user can fill manually
-  const fieldsDisabled = selfMode && !!runner && !isEditing;
 
   return (
     <div className="space-y-6">
@@ -1104,41 +1376,18 @@ function renderStep1({
           </label>
         </RadioGroup>
 
-        {selfMode && runner && (
-          <div className="mt-3 flex items-center justify-between rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-800">
-            <span className="flex items-center gap-1.5">
-              <Info className="size-3.5" />
-              {isEditing
-                ? "Estás editando los datos de tu perfil para esta inscripción."
-                : "Datos cargados desde tu perfil. Puedes editarlos si lo deseas."}
-            </span>
-            <button
-              type="button"
-              onClick={() => setIsEditing(!isEditing)}
-              className={`inline-flex items-center gap-1 rounded-md px-2 py-1 font-medium transition-colors ${
-                isEditing
-                  ? "bg-red-100 text-red-700 hover:bg-red-200"
-                  : "bg-white text-red-600 hover:bg-red-50"
-              }`}
-            >
-              {isEditing ? (
-                <>
-                  <X className="size-3" /> Cancelar
-                </>
-              ) : (
-                <>
-                  <Pencil className="size-3" /> Editar perfil
-                </>
-              )}
-            </button>
+        {lookupInfo && (
+          <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-xs text-emerald-800">
+            <p className="flex items-center gap-1.5 font-semibold">
+              <UserCheck className="size-3.5" />
+              ¡Bienvenido(a) de vuelta, {lookupInfo.nombre}!
+            </p>
+            <p className="mt-0.5 leading-relaxed">
+              Cargamos automáticamente tus datos guardados de inscripciones
+              anteriores. Si cambió tu teléfono, ciudad, club u otro dato,
+              modifícalo aquí — se actualizará tu perfil.
+            </p>
           </div>
-        )}
-
-        {selfMode && !runner && (
-          <p className="mt-3 flex items-center gap-1.5 rounded-md bg-gray-50 px-3 py-2 text-xs text-gray-500">
-            <Info className="size-3.5" />
-            No se encontró un perfil de corredor. Completa los datos manualmente.
-          </p>
         )}
       </div>
 
@@ -1154,9 +1403,9 @@ function renderStep1({
           <Input
             id="cedula"
             value={formData.cedula}
-            onChange={(e) => update("cedula", e.target.value)}
+            onChange={(e) => handleCedulaChange(e.target.value)}
             placeholder="V-12345678"
-            disabled={fieldsDisabled}
+            autoComplete="off"
             aria-invalid={!!errors.cedula}
           />
           <FieldError message={errors.cedula} />
@@ -1170,7 +1419,6 @@ function renderStep1({
           <Select
             value={formData.genero}
             onValueChange={(v) => update("genero", v)}
-            disabled={fieldsDisabled}
           >
             <SelectTrigger className="w-full" aria-invalid={!!errors.genero}>
               <SelectValue placeholder="Selecciona…" />
@@ -1196,7 +1444,6 @@ function renderStep1({
             value={formData.nombres}
             onChange={(e) => update("nombres", e.target.value)}
             placeholder="Nombres"
-            disabled={fieldsDisabled}
             aria-invalid={!!errors.nombres}
           />
           <FieldError message={errors.nombres} />
@@ -1212,7 +1459,6 @@ function renderStep1({
             value={formData.apellidos}
             onChange={(e) => update("apellidos", e.target.value)}
             placeholder="Apellidos"
-            disabled={fieldsDisabled}
             aria-invalid={!!errors.apellidos}
           />
           <FieldError message={errors.apellidos} />
@@ -1228,7 +1474,6 @@ function renderStep1({
             type="date"
             value={formData.fechaNacimiento}
             onChange={(e) => update("fechaNacimiento", e.target.value)}
-            disabled={fieldsDisabled}
             max={toInputDate(new Date())}
             aria-invalid={!!errors.fechaNacimiento || !!birthDateIssue}
           />
@@ -1278,7 +1523,6 @@ function renderStep1({
             value={formData.email}
             onChange={(e) => update("email", e.target.value)}
             placeholder="correo@ejemplo.com"
-            disabled={fieldsDisabled}
             aria-invalid={!!errors.email}
           />
           <FieldError message={errors.email} />
@@ -1294,19 +1538,11 @@ function renderStep1({
             value={formData.telefono}
             onChange={(e) => update("telefono", e.target.value)}
             placeholder="0412-1234567"
-            disabled={fieldsDisabled}
             aria-invalid={!!errors.telefono}
           />
           <FieldError message={errors.telefono} />
         </div>
       </div>
-
-      {fieldsDisabled && (
-        <p className="flex items-center gap-1.5 rounded-md bg-gray-100 px-3 py-2 text-xs text-gray-500">
-          <Lock className="size-3.5" />
-          Los campos están bloqueados. Pulsa “Editar perfil” para modificarlos.
-        </p>
-      )}
     </div>
   );
 }
@@ -1456,8 +1692,7 @@ interface Step3Props {
   formData: RegFormData;
   errors: Partial<Record<keyof RegFormData | "waiverAccepted", string>>;
   update: <K extends keyof RegFormData>(field: K, value: RegFormData[K]) => void;
-  categories: RegCategory[];
-  eligibleCategories: RegCategory[];
+  selectedCategory: RegCategory | null;
   calculatedAge: number | null;
 }
 
@@ -1465,8 +1700,7 @@ function renderStep3({
   formData,
   errors,
   update,
-  categories,
-  eligibleCategories,
+  selectedCategory,
   calculatedAge,
 }: Step3Props) {
   const showClubOtro = formData.club === CLUB_OPCIONES_ESPECIALES[0];
@@ -1554,99 +1788,81 @@ function renderStep3({
 
       <Separator />
 
-      {/* Categories */}
+      {/* Categoría asignada automáticamente (no se elige) */}
       <div>
-        <div className="mb-3 flex items-center justify-between gap-2">
-          <div>
-            <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900">
-              <Trophy className="size-4 text-red-600" /> Categorías disponibles
-            </h3>
-            <p className="text-xs text-gray-500">
-              {calculatedAge !== null
-                ? `Tu edad: ${calculatedAge} años — te asignamos una categoría automáticamente, puedes cambiarla si lo deseas.`
-                : "Selecciona la categoría que corresponda."}
-            </p>
-          </div>
-          {categories.length > 0 && (
-            <Badge variant="outline" className="border-red-200 bg-red-50 text-red-700">
-              {categories.length} total
-            </Badge>
-          )}
+        <div className="mb-3">
+          <h3 className="flex items-center gap-2 text-sm font-bold text-gray-900">
+            <Trophy className="size-4 text-red-600" /> Tu categoría
+          </h3>
+          <p className="text-xs text-gray-500">
+            Se asigna automáticamente según tu fecha de nacimiento y género —
+            no necesitas elegirla.
+          </p>
         </div>
 
-        {categories.length === 0 ? (
-          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-10 text-center">
-            <AlertCircle className="mx-auto size-8 text-gray-400" />
+        {calculatedAge === null ? (
+          <div className="rounded-xl border border-dashed border-gray-300 bg-gray-50 px-4 py-8 text-center">
+            <Info className="mx-auto size-6 text-gray-400" />
             <p className="mt-2 text-sm font-medium text-gray-600">
-              No hay categorías definidas para este evento.
+              Completa tu fecha de nacimiento y género en el Paso 1
             </p>
             <p className="text-xs text-gray-400">
-              Contacta al organizador para más información.
+              La categoría se calculará automáticamente con tu edad.
+            </p>
+          </div>
+        ) : !selectedCategory ? (
+          <div className="rounded-xl border border-red-200 bg-red-50 px-4 py-6 text-center">
+            <AlertCircle className="mx-auto size-6 text-red-500" />
+            <p className="mt-2 text-sm font-semibold text-red-700">
+              No hay categoría disponible para {calculatedAge} años
+              {formData.genero === "F" ? " (Femenino)" : formData.genero === "M" ? " (Masculino)" : ""}
+            </p>
+            <p className="mt-1 text-xs text-red-500">
+              Verifica tu fecha de nacimiento o contacta al organizador del evento.
             </p>
           </div>
         ) : (
-          <RadioGroup
-            value={formData.categoryId}
-            onValueChange={(v) => update("categoryId", v)}
-            className="max-h-96 space-y-2 overflow-y-auto pr-1"
-          >
-            {categories.map((c) => {
-              const isEligible = eligibleCategories.some((e) => e.id === c.id);
-              const isSelected = formData.categoryId === c.id;
-              return (
-                <label
-                  key={c.id}
-                  htmlFor={`cat-${c.id}`}
-                  className={`flex cursor-pointer items-start gap-3 rounded-xl border p-3 transition-all ${
-                    isSelected
-                      ? "border-red-500 bg-red-50/60 ring-2 ring-red-100"
-                      : isEligible
-                      ? "border-gray-200 bg-white hover:border-red-300"
-                      : "border-gray-100 bg-gray-50/60 opacity-70 hover:border-gray-200"
-                  }`}
-                >
-                  <RadioGroupItem
-                    value={c.id}
-                    id={`cat-${c.id}`}
-                    className="mt-1"
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="font-semibold text-gray-900">
-                        {c.name}
-                      </span>
-                      {isEligible && (
-                        <Badge className="bg-green-100 text-[10px] text-green-700 hover:bg-green-100">
-                          {isSelected ? "Asignada" : "Sugerida"}
-                        </Badge>
-                      )}
-                    </div>
-                    <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <User className="size-3" />
-                        {c.gender === "M"
-                          ? "Varones"
-                          : c.gender === "F"
-                            ? "Damas"
-                            : "Mixto"}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Calendar className="size-3" />
-                        {c.minAge}
-                        {c.maxAge && c.maxAge < 100 ? `–${c.maxAge}` : "+"} años
-                      </span>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold text-red-600">
-                      ${c.price.toFixed(2)}
-                    </p>
-                    <p className="text-[10px] uppercase text-gray-400">USD</p>
-                  </div>
-                </label>
-              );
-            })}
-          </RadioGroup>
+          <div className="rounded-xl border-2 border-red-500 bg-red-50/60 p-4 ring-2 ring-red-100">
+            <div className="flex items-start justify-between gap-3">
+              <div className="min-w-0">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-lg font-bold text-gray-900">
+                    {selectedCategory.name}
+                  </span>
+                  <Badge className="bg-red-600 text-[10px] text-white hover:bg-red-600">
+                    Asignada automáticamente
+                  </Badge>
+                </div>
+                <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <User className="size-3" />
+                    {selectedCategory.gender === "M"
+                      ? "Varones"
+                      : selectedCategory.gender === "F"
+                      ? "Damas"
+                      : "Mixto"}
+                  </span>
+                  <span className="flex items-center gap-1">
+                    <Calendar className="size-3" />
+                    {selectedCategory.minAge}
+                    {selectedCategory.maxAge && selectedCategory.maxAge < 100
+                      ? `–${selectedCategory.maxAge}`
+                      : "+"}{' '}años
+                  </span>
+                </div>
+                <p className="mt-2 flex items-center gap-1 text-[11px] text-gray-400">
+                  <Lock className="size-3" />
+                  Calculada con tu edad actual: {calculatedAge} años
+                </p>
+              </div>
+              <div className="shrink-0 text-right">
+                <p className="text-lg font-bold text-red-600">
+                  ${selectedCategory.price.toFixed(2)}
+                </p>
+                <p className="text-[10px] uppercase text-gray-400">USD</p>
+              </div>
+            </div>
+          </div>
         )}
         <FieldError message={errors.categoryId} />
       </div>

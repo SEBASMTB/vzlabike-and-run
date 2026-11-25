@@ -66,15 +66,19 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
   if (loading) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header />
+        <div className="print:hidden">
+          <Header />
+        </div>
         <main className="flex-1 pt-20 flex items-center justify-center">
           <div className="flex flex-col items-center gap-3">
             <Loader2 className="size-8 animate-spin text-red-500" />
             <p className="text-muted-foreground">Cargando formulario de inscripción...</p>
           </div>
         </main>
-        <Footer />
-        <WhatsAppButton />
+        <div className="print:hidden">
+          <Footer />
+          <WhatsAppButton />
+        </div>
       </div>
     );
   }
@@ -82,7 +86,9 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
   if (error) {
     return (
       <div className="min-h-screen flex flex-col bg-gray-50">
-        <Header />
+        <div className="print:hidden">
+          <Header />
+        </div>
         <main className="flex-1 pt-20 flex items-center justify-center">
           <div className="text-center max-w-md px-4">
             <p className="text-xl font-semibold text-foreground mb-2">{error}</p>
@@ -91,8 +97,10 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
             </a>
           </div>
         </main>
-        <Footer />
-        <WhatsAppButton />
+        <div className="print:hidden">
+          <Footer />
+          <WhatsAppButton />
+        </div>
       </div>
     );
   }
@@ -123,18 +131,18 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
 
   return (
     <div className="min-h-screen flex flex-col bg-gray-50">
-      <Header />
+      <div className="print:hidden">
+        <Header />
+      </div>
       <main className="flex-1 pt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <RegistrationWizard
-            event={eventData}
-            runner={null}
-            categories={catList}
-          />
+          <RegistrationWizard event={eventData} categories={catList} />
         </div>
       </main>
-      <Footer />
-      <WhatsAppButton />
+      <div className="print:hidden">
+        <Footer />
+        <WhatsAppButton />
+      </div>
     </div>
   );
 }

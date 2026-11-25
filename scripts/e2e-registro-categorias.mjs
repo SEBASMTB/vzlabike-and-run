@@ -7,7 +7,7 @@
  * 5) Bulk de categorías → GET público source:"db" → inscripción con categoryId
  * 6) PUT fecha "2027-02-14" → sigue en mediodía UTC
  */
-const BASE = "http://localhost:3100";
+const BASE = process.env.E2E_BASE || "http://localhost:3100";
 const TOKEN_SECRET = "vzlabike-admin-secret-key";
 
 function makeToken() {
