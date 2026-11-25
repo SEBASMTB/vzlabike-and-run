@@ -28,17 +28,20 @@ export async function GET(request: NextRequest) {
 
     if (search) {
       const term = search.trim().replace(/'/g, "''");
-      whereParts.push(`(r.firstName LIKE '%${term}%' OR r.lastName LIKE '%${term}%' OR r.idNumber LIKE '%${term}%' OR r.email LIKE '%${term}%')`);
+      whereParts.push(`(r.firstName LIKE '%${term}%' OR r.lastName LIKE '%${term}%' OR r.idNumber LIKE '%${term}%' OR r.email LIKE '%${term}%' OR CAST(r.bibNumber AS TEXT) LIKE '%${term}%')`);
     }
 
     const whereClause = whereParts.join(" AND ");
 
     // Get registrations
-    const registrations = await db.$queryRawUnsafe(
+    const rows = await db.$queryRawUnsafe(
       `SELECT r.id, r.firstName, r.lastName, r.email, r.phone, r.idNumber,
               r.gender, r.dateOfBirth, r.shirtSize, r.status, r.createdAt,
               r.paymentMethod, r.paymentRef, r.totalAmount, r.bibNumber,
               r.eventId, r.categoryId,
+              r.team, r.club, r.ciudad, r.estado, r.hasShirt,
+              r.emergencyContact, r.emergencyPhone,
+              r.emergName, r.emergPhone, r.emergRelation,
               e.title as eventTitle, e.date as eventDate,
               c.name as categoryName
        FROM Registration r
@@ -47,7 +50,39 @@ export async function GET(request: NextRequest) {
        WHERE ${whereClause}
        ORDER BY r.createdAt DESC
        LIMIT ${limit} OFFSET ${offset}`
-    );
+    ) as any[];
+
+    // Normalizar a la forma que consume el panel (objetos runner/category/event)
+    // a partir de los campos planos/legacy de la tabla Registration.
+    const registrations = rows.map((r) => ({
+      ...r,
+      event: r.eventTitle
+        ? { id: r.eventId, title: r.eventTitle, date: r.eventDate }
+        : null,
+      category: r.categoryName
+        ? { id: r.categoryId, name: r.categoryName }
+        : null,
+      runner: r.idNumber
+        ? {
+            id: r.runnerId || "",
+            cedula: r.idNumber,
+            nombres: r.firstName,
+            apellidos: r.lastName,
+            fechaNacimiento: r.dateOfBirth,
+            genero: r.gender,
+            email: r.email,
+            telefono: r.phone,
+            estado: r.estado,
+            ciudad: r.ciudad,
+            team: r.team || r.club || null,
+            contactoEmergenciaNombre:
+              r.emergencyContact || r.emergName || null,
+            contactoEmergenciaTelefono:
+              r.emergencyPhone || r.emergPhone || null,
+            contactoEmergenciaParentesco: r.emergRelation || null,
+          }
+        : null,
+    }));
 
     // Get total count
     const countResult = await db.$queryRawUnsafe(
