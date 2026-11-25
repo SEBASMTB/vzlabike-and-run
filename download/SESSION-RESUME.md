@@ -7,132 +7,125 @@
 ## 📋 PROMPT DE RESUMEN Y ESTADO ACTUAL
 
 ```
-Estoy trabajando en el proyecto VzlaBike and Run, una plataforma de cronometraje deportivo en Next.js 16 + Prisma + Turso.
+Estoy trabajando en el proyecto VzlaBike and Run, una plataforma de cronometraje deportivo en Next.js 16 + Prisma 6 + Tailwind CSS 4 + Turso.
 
 == ESTADO DEL PROYECTO ==
-- Repo GitHub: https://github.com/SEBASMTB/vzlabike-and-run
+- Repo GitHub: https://github.com/SEBASMTB/vzlabike-and-run (rama main, LIMPIO, todo pusheado)
 - Deploy Vercel: https://vzlabike-and-run.vercel.app
 - Admin: https://vzlabike-and-run.vercel.app/admin/login (pass: vzlabike2024)
 - Base de datos: Turso (libsql://vzlabikeandrun-vbrresult.aws-us-west-2.turso.io)
-- Estado del repo: Limpio, todo commiteado y pusheado
+- Última sesión cerrada: 2026-11-25, HEAD = cb25c17
+- Guía de staging: download/STAGING-SETUP.md (subdominio + Turso separada, aún sin crear)
 
 == ARCHIVO DE ESTADO COMPLETO ==
-Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
-- Funciones operativas
-- Errores pendientes
-- Arquitectura de archivos
-- Historial de commits
-- Siguiente paso inmediato
+Lee /home/z/my-project/download/PROYECTO-ESTADO.md para: funciones operativas,
+errores pendientes, arquitectura, historial de commits y siguiente paso.
 
-== LO QUE ESTAMOS HACIENDO AHORA ==
-**CUPOS EN VIVO + EXCEL + LISTA PÚBLICA** (commit `0b1b979`, deployado y verificado en producción 2026-11-25):
+== LO ÚLTIMO QUE SE HIZO (2026-11-25, GREEN LIGHT COMPLETO del usuario) ==
 
-Pedido del usuario (con captura del evento mostrando "Cupos disponibles: 500 de 500"):
-1. "Cuando inscribo en un evento no me hace el descuento de los cupos; he inscrito dos personas y no hace el descuento" → CAUSA: la página de detalle forzaba `registrationCount: 0` y el API no devolvía el conteo. FIX: `/api/events/[slug]` expone `registrationCount` real, `/api/events` suma COUNT por evento, el cliente usa el valor real. **Producción: LA RUTA DE LA CAMPAÑA ADMIRABLE muestra "498 de 500" y "Participantes 2 / 500".**
-2. "En el panel administrativo debo tener la opción de descargar en Excel" → NUEVO `GET /api/admin/export/inscripciones` (ExcelJS, 26 columnas: dorsal, cédula, nombre, género, f. nacimiento, categoría, equipo, talla franela, camiseta, email, teléfono, estado, ciudad, emergencia con parentesco, método/referencia, montos USD/Bs, tasa BCV, evento, fecha, estado, waiver). Respeta los filtros activos del panel (evento/estado/categoría/búsqueda); botón "Exportar Excel (.xlsx)" siempre visible. Además: el filtro por categoría AHORA SÍ filtra (la API ignoraba categoryId) y la exportación ChuckScore estaba ROTA (500 por `include: { category: true }` — la relación es `categoryRef`) → reescrita con raw SQL + JOINs, verificada en producción.
-3. "Tener la opción de un listado por evento para publicar" → LISTA PÚBLICA `/eventos/[slug]/inscritos` reescrita sobre el nuevo endpoint `GET /api/events/[slug]/participantes` (dorsal, nombre, categoría, equipo, ciudad, estado Confirmado/Pendiente; SIN cédula ni fecha de nacimiento ni contactos; REJECTED ocultas). Hero con 4 stats, buscador, botón imprimir, CTA de inscripción. Enlace "Ver lista de inscritos (N)" en la página del evento y botón "Lista pública" en el panel. **Producción: https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscritos**
+El usuario dio luz verde al rediseño completo y se implementó TODO en 8 commits atómicos
+(a2baa26 → cb25c17), cada uno pusheado y verificado en producción:
 
-Notas técnicas del commit `0b1b979`:
-- Se eliminó la duplicidad de rutas: la página vieja `src/app/eventos/[slug]/inscritos/page.tsx` (sin grupo) chocaba con la nueva en `(main)` → se reemplazó el contenido de la original y se borró el duplicado.
-- La DB local quedó sincronizada con `prisma db push` (runnerId nullable) — producción no se tocó.
-- Las 2 inscripciones reales en producción (bib 2 FUNDACION VENEZUELABIKE y bib 3 NATHALIE MORENO) están ahora APPROVED/Confirmado.
+1. `a2baa26` ESQUEMA: Category.bibStart/bibEnd (lotes de dorsales), Event.paymentAccounts
+   (JSON de cuentas de pago por evento) + Event.bibBoxSize (cajas físicas 100/150),
+   Registration.rejectReason + bibBoxLabel, tabla NUEVA PaymentRecord (pagos sin ficha),
+   índices únicos PARCIALES: (eventId,bibNumber) WHERE bibNumber IS NOT NULL y
+   (eventId,paymentRef) WHERE paymentRef != ''. Estados únicos PENDING/APPROVED/REJECTED
+   (db.ts normaliza legacy pending/confirmed/rejected al arrancar). OJO TÉCNICO: el DDL se
+   divide por ';' — los comentarios SQL NO deben llevar ';' dentro. Cada statement del init
+   lleva catch propio (un índice con datos sucios no tumba el arranque).
 
-== TAREA ANTERIOR (COMPLETADA) ==
-**EXPERIENCIA DE INSCRIPCIÓN 2.0** (commit `ee345c3`, verificado en producción 2026-11-25):
+2. `0f7fcdc` WIZARD 3 PASOS (src/components/registration/RegistrationWizard.tsx, reescrito):
+   Paso 1 "Datos del Corredor" (tipo self/other + autocompletado por cédula vía
+   /api/runners/lookup con debounce 600ms + identidad + contacto + estado/ciudad +
+   emergencia), Paso 2 "Categoría y Talla" (club + categoría AUTO y bloqueada por
+   edad/género + talla franela), Paso 3 "Pago" (monto+tasa BCV CONGELADOS — la tasa se
+   fetch-ea UNA vez al montar; cuentas de pago del evento SOLO aquí, parseadas con
+   src/lib/payment-accounts.ts parsePaymentAccounts; método con Binance USDT agregado a
+   METODOS_PAGO; referencia única; comprobante ≤3MB; waiver). Recibo final: dorsal "se
+   asigna al aprobar". Register API: status PENDING (uppercase), bibNumber NULL al crear,
+   validación de referencia duplicada NORMALIZADA (normalizePaymentRef: solo [A-Z0-9]),
+   y conciliación automática: si la ref coincide con un PaymentRecord UNMATCHED del mismo
+   evento → lo marca MATCHED con matchedRegistrationId.
 
-Pedido del usuario (con captura del recibo de NATHALIE MORENO):
-1. "En este recibo que salga TODO: categoría, talla de franela, todo" → RECIBO COMPLETO en 4 secciones con dorsal provisional, desglose USD+Bs+tasa BCV y botón Imprimir.
-2. "Al colocar la fecha de nacimiento automáticamente se despliegue la categoría según la edad, NO queremos darle a elegir" → PASO 3 SIN SELECTOR: card bloqueada "Asignada automáticamente" recalculada al vuelo (edad+género); aviso claro si no hay categoría compatible.
-3. "Si ese corredor vuelve a inscribirse sus datos queden guardados para no llenar un formulario nuevamente" → `GET /api/runners/lookup?cedula=` precarga el perfil (nombres, contacto, ciudad, club, talla, emergencia) al escribir la cédula, con banner "¡Bienvenido(a) de vuelta!".
-4. "Darle una opción para modificar los datos por si cambia teléfono, dirección, etc." → los campos precargados quedan SIEMPRE editables; al inscribir, el upsert del Runner actualiza el perfil con lo nuevo (y ahora también guarda talla de franela + contacto de emergencia).
+3. `1d796da` EVENTFORMPAGE: CategoryRow con bibStart/bibEnd (strings para inputs);
+   botón "Auto-calcular lotes correlativos" (reparte maxParticipants en bloques iguales,
+   Élite → Juvenil → por edad, helper bibPriority); validación bibOverlapError (no guarda
+   si hay rangos cruzados); tarjeta "Datos de Pago y Cajas de Entrega" (bibBoxSize 100/150
+   + PaymentAccountsEditor dinámico por método); payload añade paymentAccounts/bibBoxSize;
+   bulk de categorías guarda bibStart/bibEnd. APIs de eventos aceptan los campos nuevos
+   (POST /api/events + PUT /api/admin/events/[id] fieldMap).
 
-Verificación:
-- E2E API local: e2e-registro-categorias 15/15 PASS + e2e-runners-lookup.mjs 9/9 PASS (nuevo).
-- Recorrido visual completo local (scripts/browser-e2e.sh): banner → prefill → categoría bloqueada ("Sub-Máster Varones 30-39, Asignada automáticamente") → recibo con 13/13 campos.
-- Producción: lookup encuentra a NATHALIE MORENO (9479255, con y sin prefijo V-); wizard real muestra el banner y precarga Mérida/VzlaBike and Run Team; el resumen muestra la categoría auto-asignada.
+4. `d739ff1` MOTOR DE DORSALES: src/lib/bib-assignment.ts → assignBibForRegistration():
+   primer LIBRE dentro del lote de la categoría; fallback primer libre global (1..max);
+   3 reintentos ante P2002 (índice único). releaseBib() al rechazar/devolver a pendiente.
+   bibBoxLabel() convención del usuario: caja 100 → "1–99, 100–199…" (end = start===1 ?
+   size-1 : start+size-1). PATCH /api/admin/registrations/[id]: REJECTED exige
+   rejectReason (400 si falta) y libera dorsal; APPROVED llama assignBib; bibNumber manual
+   recalcula caja. NUEVOS endpoints: POST /api/admin/registrations/bulk (approve/reject
+   con motivo/delete masivos), POST /api/admin/registrations/quick (inscripción rápida en
+   sitio: nace APPROVED + dorsal/caja inmediatos + runner upsert + conciliación),
+   GET/POST /api/admin/payments + PATCH/DELETE /api/admin/payments/[id].
+   TEST UNITARIO 9/9 PASS (lotes, liberación, reasignación, unicidad, conciliación).
 
-Reporte anterior: flujo de inscripción roto (fecha off-by-one, categorías 500, sin persistencia) → RESUELTO en `1fde98d`/`260114f`.
+5. `1a6313b` PANEL ADMIN (inscripciones/page.tsx reescrita): pendientes por defecto,
+   checkboxes + barra masiva, dialog de rechazo con motivo obligatorio, TAB "Pagos sin
+   Ficha" (formulario rápido + lista con filtros Sin conciliar/Conciliados/Ignorados +
+   botón "Aprobar + dorsal" en 1 clic para el MATCHED), botón "⚡ Inscripción rápida en
+   sitio" con dialog propio (resultado muestra dorsal+caja), detalle con dorsal/caja/
+   motivo/comprobante, listado admin devuelve bibBoxLabel/rejectReason/paymentProofUrl
+   (SELECT ampliado). ChuckScore SOLO APROBADOS orden por dorsal + columna "Kit Box";
+   Excel general 28 columnas (+Caja de Retiro, +Motivo de Rechazo).
 
-Causas raíz encontradas y corregidas:
-- **Fecha off-by-one**: se guardaba medianoche UTC y se mostraba con zona local (UTC-4). Ahora: `src/lib/date-utils.ts` formatea SIEMPRE en UTC y date-only se guarda al mediodía UTC (POST/PUT eventos). Barrido UTC en ~12 archivos (EventCard, wizard, OrderSummary, waiver, emails, admin…).
-- **Categorías 500**: endpoint público leía `openCategories` (campo INEXISTENTE en el esquema) → PrismaClientValidationError. Reescrito: lee tabla `Category` (modelo Prisma) y si el evento no tiene categorías definidas sirve automáticamente las estándar del deporte (nunca bloquea la inscripción).
-- **Registro roto en Prisma**: el modelo `Registration` no tenía el campo `category` (texto) que existe en la BD, y exigía `runnerId`/`categoryId` → todo `registration.create` fallaba. Ahora: campo agregado al esquema, runnerId/categoryId opcionales, `categoryId` se resuelve por nombre al inscribir.
-- **Columna `hasShirt` faltante** en DDL/migraciones (P2022 en producción): añadida a db.ts y db-init.ts. Tabla `Runner` añadida al DDL (flujo FASE-2).
-- **Wizard**: auto-asigna la categoría según edad+género (badge "Asignada", el atleta puede cambiarla); MTB valida legacy JSON con reglas Élite/100 Kilos/Recreativo, BD/estándar con validación genérica.
-- Limpieza: eliminado `CategoryManager.tsx` huérfano (usaba tabla raw inexistente); ruta admin de categorías migrada al modelo `Category`.
-- Script E2E reutilizable: `scripts/e2e-registro-categorias.mjs` (16 checks).
+6. `71b6595` PÚBLICO + PII: BibLookupWidget en la página del evento (consulta por cédula
+   → estado + dorsal + caja, endpoint GET /api/events/[slug]/mi-inscripcion rate-limited,
+   solo datos mínimos); participantes API + lista inscritos con columna Caja; ELIMINADO
+   código muerto con fuga PII: /api/registrations/lookup (daba email/tel/DOB sin auth),
+   RegistrationDialog.tsx, GroupRegistrationDialog.tsx (usaban /api/register roto),
+   /api/register, /api/register-group, /api/eligibility; /api/registrations ahora exige
+   auth; EventsSection simplificada (sin dialogs); EventDetailPage sin RegistrationDialog
+   (se añadió FileText que faltaba — error TS preexistente).
 
-**ITERACIÓN 2 (`260114f`, 2026-11-25)** — el usuario mandó captura mostrando "14/02/2027 → Edad calculada: -1 años" (año mal escrito; el date input del navegador convierte "27" en 2027). Corregido:
-- **Validación EN VIVO de fecha de nacimiento**: error visible al instante bajo "Edad calculada" ("La fecha no puede ser futura — verifica el año", mín. 5 años, máx. 100), borde rojo, `max=hoy` en el input; mensajes unificados en `validateStep`.
-- **Validación server-side espejo**: `POST /api/events/[slug]/register` rechaza fechas futuras/ imposibles con 400 (acepta DD/MM/YYYY o ISO).
-- **Persistencia completa en BD**: la Registration guarda estado, ciudad, contacto de emergencia + parentesco, `totalAmount`/`totalAmountBs`/`bcvRate`, comprobante (`paymentProofUrl`) y `registrationType`; **upsert de Runner por cédula** con `runnerId` vinculado + `categoryId` resuelto.
-- **FileUpload comprime imágenes** en el navegador (máx 1600px JPEG q0.82, solo >400KB; PDFs topados en 3MB) y guard del endpoint 1.5MB→4MB — evita 413 del límite serverless (~4.5MB).
+7. `467052e` FIX: stringifySafe() en /api/events (COUNT devolvía BigInt con adaptador
+   libSQL local y JSON.stringify reventaba).
 
-**VERIFICACIÓN EN PRODUCCIÓN (2026-11-25)**: evento `la-ruta-de-la-campana-admirable` → header "domingo, 14 de febrero de 2027"; 16 categorías desde BD (`source: db`); wizard paso 3 con "Tu edad: 57 años", 8 elegibles y **Máster C Masculino (50-59) auto-asignada**; POST de prueba HTTP 201 con `runnerId`+`categoryId`+montos persistidos; fecha futura → 400. ⚠️ Quedó 1 inscripción de prueba en producción (PRUEBA VERIFICACION-VBR, cédula 99000001, bib 1) — borrarla desde el panel admin.
+8. `cb25c17` FIX: filtro status=todos/all en GET /api/admin/payments (filtraba literal
+   "TODOS" y devolvía vacío).
+
+== VERIFICACIÓN ==
+- LOCAL: build limpio (tsc sin errores en archivos nuevos; next build OK), E2E HTTP
+  12/12 funcional (scripts borrados tras correr; logs en la sesión).
+- PRODUCCIÓN: deploy verificado con E2E real sobre el evento LA RUTA DE LA CAMPANA
+  ADMIRABLE — pago sin ficha creado → registro PENDING sin dorsal → conciliación
+  automática MATCHED → aprobación 1-clic asignó dorsal 1 + "Caja 1–99" → mi-inscripcion
+  público mostró APPROVED+dorsal+caja → ChuckScore con Kit Box incluyó solo aprobados →
+  TODOS los datos de prueba ELIMINADOS al final (count quedó en 2: NATHALIE bib 3 y
+  FUNDACION bib 2, ambos APPROVED reales). Endpoints PII cerrados (401/404). Wizard e
+  inscritos 200. NOTA: un check de conciliación falló por lag de réplica Turso (lectura
+  desactualizada un instante); el matching funciona — informativo, no requiere acción.
+
+== CONFIGURACIÓN QUE EL USUARIO DEBE HACER EN EL PANEL (10 min) ==
+1. Editar evento real → "Datos de Pago y Cajas de Entrega": cargar cuentas reales
+   (Pago Móvil/Zelle/Binance) y tamaño de caja (100/150).
+2. Sección 4 → lotes de dorsales por categoría o "Auto-calcular lotes correlativos".
+   (Sin lotes, el sistema asigna primer libre global: los bibs existentes 2 y 3 se
+   respetan, el próximo será el 1.)
 
 == SIGUIENTE PASO ==
-1. Panel admin ágil (fase 2): vista pendientes por defecto, motivo de rechazo, email al aprobar/rechazar, acciones masivas, export solo aprobados
-2. Feedback pendiente de la sección Monitor Live (`1b9a1e4`)
-3. (Resuelto en `0b1b979`): cupos en vivo, Excel general con todos los campos, lista pública por evento sin PII, ChuckScore reparado, filtro por categoría del panel
-4. (Resuelto en `ee345c3`): recibo completo, categoría automática bloqueada, datos precargados por cédula y edición de perfil
-5. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
-6. PII restante: `/api/registrations/lookup` sin auth devuelve email/teléfono/DOB; `GET /api/registrations` vuelca paymentRef
+1. (Opcional) Crear staging con download/STAGING-SETUP.md.
+2. Email al aprobar/rechar con Resend (fase 2 restante).
+3. Re-subir imagen del evento MISS desde el panel (incidente 2026-11-10).
+4. Verificar con el usuario si restaurar CAMPAÑA ADMIRABLE y LA CULATA (borradas en
+   pruebas del usuario).
 
-== PROTOCOLO DE TRABAJO ==
-1. Cada cambio → commit atómico + git push origin main
-2. Vercel sincroniza automáticamente
-3. Actualizar download/PROYECTO-ESTADO.md tras cada cambio
-4. Nunca dejar cambios sin commitear
-
-Empieza leyendo PROYECTO-ESTADO.md y dime qué encuentras.
+== REGLAS DE ORO DEL PROYECTO ==
+- Protocolo de guardado: commit atómico → git pull --rebase origin main → git push
+  origin main → esperar deploy Vercel → verificar en producción → actualizar
+  PROYECTO-ESTADO.md y SESSION-RESUME.md → segundo commit/push de docs.
+- Fuente ÚNICA de categorías = modelo Prisma Category (jamás revivir CategoryManager/
+  EventCategory).
+- Dorsales SOLO al aprobar (PENDING/REJECTED bibNumber NULL).
+- La lista pública jamás expone cédula/DOB/contactos (participantes API).
+- Categorías de eventos SIEMPRE desde BD con fallback estándar del deporte.
+- Fechas SIEMPRE UTC (src/lib/date-utils.ts, mediodía UTC para date-only).
 ```
-
----
-
-## 📝 CÓMO USAR ESTE ARCHIVO
-
-1. **Al inicio de una nueva sesión:** copia el prompt de arriba y pégalo en el chat
-2. **Al final de cada sesión:** actualiza este archivo con:
-   - La tarea que estabas haciendo
-   - En qué archivo te quedaste
-   - Cuál es el siguiente paso
-
----
-
-## 🔧 COMANDOS ÚTILES PARA EMPEZAR
-
-```bash
-# Ver estado del proyecto
-cd /home/z/my-project
-git status
-git log --oneline -5
-
-# Levantar servidor local
-bun run dev
-
-# Probar conexión a Turso
-node scripts/migrate-turso.js
-
-# Crear evento demo
-python3 scripts/fix-demo-event.py
-
-# Hacer commit y push
-git add .
-git commit -m "feat: Descripción del cambio"
-git push origin main
-```
-
----
-
-## 🌐 URLS IMPORTANTES
-
-| Servicio | URL |
-|----------|-----|
-| Sitio público | https://vzlabike-and-run.vercel.app |
-| Admin login | https://vzlabike-and-run.vercel.app/admin/login |
-| Eventos públicos | https://vzlabike-and-run.vercel.app/eventos |
-| Lista pública de inscritos (ejemplo) | https://vzlabike-and-run.vercel.app/eventos/la-ruta-de-la-campana-admirable/inscritos |
-| GitHub repo | https://github.com/SEBASMTB/vzlabike-and-run |
-| Vercel dashboard | https://vercel.com/venezuelabike-9338s-projects/vzlabike-and-run |
-| Turso dashboard | https://app.turso.tech/vbrresult |
-| API health | https://vzlabike-and-run.vercel.app/api/health |
