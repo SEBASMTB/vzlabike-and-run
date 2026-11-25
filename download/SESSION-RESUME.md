@@ -25,7 +25,7 @@ Lee el archivo /home/z/my-project/download/PROYECTO-ESTADO.md para ver:
 - Siguiente paso inmediato
 
 == LO QUE ESTAMOS HACIENDO AHORA ==
-**FIX CRÍTICO del flujo de inscripción** (commit `1fde98d`, deployado, E2E local 16/16 PASS):
+**FIX CRÍTICO del flujo de inscripción** (commit `260114f`, deployado y VERIFICADO EN PRODUCCIÓN):
 
 Reporte del usuario: (1) creó evento con fecha 14/02/2027 y la inscripción mostraba 13 de febrero; (2) al marcar la fecha de nacimiento no se asignaba categoría y el paso 3 no dejaba avanzar ("Este evento no tiene categorías definidas"); (3) pidió diseñar hacia trabajo consistente con base de datos.
 
@@ -38,10 +38,18 @@ Causas raíz encontradas y corregidas:
 - Limpieza: eliminado `CategoryManager.tsx` huérfano (usaba tabla raw inexistente); ruta admin de categorías migrada al modelo `Category`.
 - Script E2E reutilizable: `scripts/e2e-registro-categorias.mjs` (16 checks).
 
+**ITERACIÓN 2 (`260114f`, 2026-11-25)** — el usuario mandó captura mostrando "14/02/2027 → Edad calculada: -1 años" (año mal escrito; el date input del navegador convierte "27" en 2027). Corregido:
+- **Validación EN VIVO de fecha de nacimiento**: error visible al instante bajo "Edad calculada" ("La fecha no puede ser futura — verifica el año", mín. 5 años, máx. 100), borde rojo, `max=hoy` en el input; mensajes unificados en `validateStep`.
+- **Validación server-side espejo**: `POST /api/events/[slug]/register` rechaza fechas futuras/ imposibles con 400 (acepta DD/MM/YYYY o ISO).
+- **Persistencia completa en BD**: la Registration guarda estado, ciudad, contacto de emergencia + parentesco, `totalAmount`/`totalAmountBs`/`bcvRate`, comprobante (`paymentProofUrl`) y `registrationType`; **upsert de Runner por cédula** con `runnerId` vinculado + `categoryId` resuelto.
+- **FileUpload comprime imágenes** en el navegador (máx 1600px JPEG q0.82, solo >400KB; PDFs topados en 3MB) y guard del endpoint 1.5MB→4MB — evita 413 del límite serverless (~4.5MB).
+
+**VERIFICACIÓN EN PRODUCCIÓN (2026-11-25)**: evento `la-ruta-de-la-campana-admirable` → header "domingo, 14 de febrero de 2027"; 16 categorías desde BD (`source: db`); wizard paso 3 con "Tu edad: 57 años", 8 elegibles y **Máster C Masculino (50-59) auto-asignada**; POST de prueba HTTP 201 con `runnerId`+`categoryId`+montos persistidos; fecha futura → 400. ⚠️ Quedó 1 inscripción de prueba en producción (PRUEBA VERIFICACION-VBR, cédula 99000001, bib 1) — borrarla desde el panel admin.
+
 == SIGUIENTE PASO ==
-1. Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE" (slug `la-ruta-de-la-campana-admirable`): fecha 14 de febrero, categorías visibles y auto-asignadas
+1. ~~Verificar en producción la inscripción de "LA RUTA DE LA CAMPAÑA ADMIRABLE"~~ ✅ VERIFICADO (ver arriba). **Pendiente menor:** borrar la inscripción de prueba (cédula 99000001) desde el panel admin
 2. Feedback pendiente de la sección Monitor Live (`1b9a1e4`)
-3. Rediseño del flujo de inscripción/pagos (4 fases presentadas, esperando OK del usuario)
+3. Rediseño del flujo de inscripción/pagos (fases 2 y 4 restantes, esperando OK del usuario; persistencia y categorías ya hechas)
 4. (Resuelto en `1fde98d`): unificación de categorías — fuente única modelo Prisma `Category`
 
 == PROTOCOLO DE TRABAJO ==

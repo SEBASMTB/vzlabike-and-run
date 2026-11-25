@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `1fde98d`)  
+> Última actualización: 2026-11-25 (commit `260114f`)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -160,6 +160,7 @@
 | 6 | ~~Inscripción pública rota (HTTP 500 en `register`)~~ | ✅ **Resuelto** (commit `1fde98d`) | `Registration.category` (texto) agregado al schema; `runnerId`/`categoryId` opcionales; columna `hasShirt` añadida a DDL/migraciones (P2022); tabla `Runner` en DDL; `categoryId` se resuelve por nombre |
 | 7 | ~~Fecha del evento desplazada un día (14/02 mostraba 13/02)~~ | ✅ **Resuelto** (commit `1fde98d`) | `src/lib/date-utils.ts`: formateo SIEMPRE UTC; date-only se guarda al mediodía UTC en POST/PUT; barrido UTC en ~12 archivos |
 | 8 | ~~Wizard no asigna categoría por fecha de nacimiento~~ | ✅ **Resuelto** (commit `1fde98d`) | Auto-asignación por edad+género con badge "Asignada" (editable). Eventos sin categorías definidas reciben las estándar del deporte |
+| 11 | ~~Fecha de nacimiento absurda (p. ej. año 2027 → edad "-1 años") sin aviso en vivo~~ | ✅ **Resuelto** (commit `260114f`) | Error bajo "Edad calculada" al instante (futura, <5, >100), borde rojo, `max=hoy` en el input; validación server-side espejo (400) |
 | 9 | `src/app/api/debug/route.ts` puede exponer info sensible | **Baja prioridad** | Solo accesible con auth |
 | 10 | PUT/DELETE admin usan interpolación de strings con escape `''` (commits `5491ae8`/`06dc196` — libSQL no soporta params) | ⚠️ Aceptable | SQLite escapa comillas dobladas y las columnas van con allowlist. Refactorizar a params si el adaptador llega a soportarlos |
 
@@ -167,14 +168,14 @@
 
 ## 🔍 REVISIÓN FLUJO INSCRIPCIONES/PAGOS (2026-11-10) — diagnóstico previo al rediseño
 
-> **ACTUALIZACIÓN 2026-11-25 (`1fde98d`)**: El hallazgo crítico y los items 1-parcial y 3 están RESUELTOS — la inscripción pública funciona E2E (E2E local 16/16 PASS en `scripts/e2e-registro-categorias.mjs`). Categorías: fuente única `Category` con fallback estándar del deporte. Límite de payload subido a 1.5MB (los comprobantes ya no dan 413, aunque aún no se persisten). Pendientes: persistir comprobante y montos, estados únicos, panel admin, PII (fases 1-2 y 4 de la propuesta).
+> **ACTUALIZACIÓN 2026-11-25 (`260114f`)**: El hallazgo crítico y los items 1, 2 y 3 están RESUELTOS — la inscripción pública funciona E2E (E2E local 16/16 PASS en `scripts/e2e-registro-categorias.mjs`; verificación en producción con POST real HTTP 201). Categorías: fuente única `Category` con fallback estándar del deporte. **Comprobante (`paymentProofUrl`), montos USD/Bs y tasa BCV ya se persisten** (con compresión client-side máx 1600px JPEG + tope 3MB PDFs + guard 4MB). **Runner por cédula con upsert** y `runnerId`/`categoryId` vinculados a la Registration. Pendientes: estados únicos, panel admin, PII (fases 2 y 4 de la propuesta).
 
 **Hallazgo crítico verificado en producción: LA INSCRIPCIÓN PÚBLICA ESTÁ ROTA (HTTP 500).**
 `POST /api/events/[slug]/register` hace `db.registration.create({ category: "texto" })` sin `runnerId`/`categoryId` que el schema exige (schema.prisma:144-147) → PrismaClientValidationError → 500. Probado en producción: 500 confirmado. Producción tiene **0 inscripciones** (el flujo nunca funcionó; no hay datos que migrar). → **RESUELTO en `1fde98d`**
 
 Otros hallazgos clave (revisión completa 2026-11-10):
-1. **Comprobante de pago nunca se guarda**: wizard envía base64 pero el route no lo lee; además body limit 10KB → todo comprobante real da 413. Campo `paymentProofUrl` existe en BD y en el admin (muerto en la práctica).
-2. **Montos y tasa BCV se descartan**: wizard envía `totalAmount/bcvRate/totalBs` pero no se persisten → admin ve monto "—", revenue usa precio del evento.
+1. ~~**Comprobante de pago nunca se guarda**~~ **RESUELTO (`260114f`)**: `paymentProofUrl` se persiste (base64); FileUpload comprime imágenes en el navegador (máx 1600px JPEG q0.82, solo >400KB) y topea PDFs en 3MB; guard del endpoint 1.5MB→4MB.
+2. ~~**Montos y tasa BCV se descartan**~~ **RESUELTO (`260114f`)**: `totalAmount`, `totalAmountBs` y `bcvRate` se guardan con la inscripción (además de estado, ciudad y contacto de emergencia con parentesco).
 3. ~~Categorías: 4 fuentes en conflicto~~ **RESUELTO (`1fde98d`)**: fuente única = `Category` (Prisma); endpoint público lee Category con fallback estándar del deporte; `openCategories` eliminado; `EventCategory`/`CategoryManager` eliminados; inscripciones guardan categoryId + snapshot texto
 4. **Estados inconsistentes**: "pending" minúscula (register) vs "PENDING" (schema) vs "confirmed" legacy (stats/dashboard) → badges sin color, filtros confusos.
 5. **Admin inscripciones**: filtro por categoría roto (UI lo envía, API lo ignora), búsqueda por dorsal no existe (placeholder lo promete), sin motivo de rechazo, sin email al aprobar/rechazar, dorsal se asigna al crear (debería ser al aprobar), export ChuckScore incluye PENDING, sin acciones masivas.
@@ -196,6 +197,8 @@ Otros hallazgos clave (revisión completa 2026-11-10):
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+260114f fix: validacion en vivo de fecha de nacimiento + persistencia completa de inscripcion en BD
+954f638 docs: estado y session-resume actualizados a 1fde98d (fix flujo inscripcion verificado en produccion)
 1fde98d fix: flujo de inscripcion funcional - fecha UTC, categorias desde BD y esquema Prisma alineado
 1b9a1e4 feat: nueva seccion Monitor Live - resultados en vivo en el sitio del evento (foto real + Ken Burns + badge EN VIVO)
 11eeb78 feat(diseno): fotos deportivas reales en Por Que Elegirnos, sin logos (reemplaza isometrico v2)
@@ -222,7 +225,7 @@ bf33f93 config: Activar Turso como base de datos de produccion
 
 ## 🚀 SIGUIENTE PASO INMEDIATO
 
-### 0. Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE" (`la-ruta-de-la-campana-admirable`) — fecha 14 feb + categorías auto-asignadas
+### 0. ~~Verificar en producción la inscripción del evento "LA RUTA DE LA CAMPAÑA ADMIRABLE"~~ ✅ **VERIFICADO (2026-11-25, `260114f`)**: fecha muestra "domingo, 14 de febrero de 2027"; 16 categorías desde BD; auto-asignación Máster C (50-59) para 57 años/M; error en vivo para fechas imposibles; POST real HTTP 201 con `runnerId`+`categoryId`+montos+BCV persistidos; fecha futura rechazada con 400. **Nota:** queda 1 inscripción de prueba (PRUEBA VERIFICACION-VBR, cédula 99000001) borable desde el panel admin
 
 ### 0.1 Continuar con el rediseño del flujo de inscripciones/pagos (fases 1-2 y 4 restantes — esperar OK del usuario; Fase 3 ya resuelta en `1fde98d`)
 
