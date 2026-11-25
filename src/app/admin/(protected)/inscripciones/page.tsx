@@ -27,6 +27,7 @@ import {
   Ban,
   Heart,
   Droplets,
+  Trash2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -55,6 +56,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Separator } from "@/components/ui/separator";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
 
@@ -205,6 +217,7 @@ export default function AdminInscripcionesPage() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [selectedReg, setSelectedReg] = useState<Registration | null>(null);
   const [exporting, setExporting] = useState(false);
+  const [deleting, setDeleting] = useState<string | null>(null);
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -306,6 +319,41 @@ export default function AdminInscripcionesPage() {
       });
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    setDeleting(id);
+    try {
+      const res = await fetch(`/api/admin/registrations/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast({
+          title: "Inscripción eliminada",
+          description: "El registro fue eliminado permanentemente",
+        });
+        if (selectedReg?.id === id) {
+          setDetailOpen(false);
+          setSelectedReg(null);
+        }
+        fetchRegistrations();
+      } else {
+        const err = await res.json().catch(() => null);
+        toast({
+          title: "Error",
+          description: err?.error || "No se pudo eliminar la inscripción",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo eliminar la inscripción",
+        variant: "destructive",
+      });
+    } finally {
+      setDeleting(null);
     }
   };
 
@@ -611,6 +659,49 @@ export default function AdminInscripcionesPage() {
                               >
                                 <Eye className="size-4" />
                               </Button>
+                              <AlertDialog>
+                                <AlertDialogTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="size-8 text-muted-foreground hover:text-red-600"
+                                    disabled={deleting === reg.id}
+                                    aria-label="Eliminar inscripción"
+                                  >
+                                    {deleting === reg.id ? (
+                                      <Loader2 className="size-4 animate-spin" />
+                                    ) : (
+                                      <Trash2 className="size-4" />
+                                    )}
+                                  </Button>
+                                </AlertDialogTrigger>
+                                <AlertDialogContent>
+                                  <AlertDialogHeader>
+                                    <AlertDialogTitle>
+                                      ¿Eliminar inscripción?
+                                    </AlertDialogTitle>
+                                    <AlertDialogDescription>
+                                      Se eliminará permanentemente el registro
+                                      de <strong>{getRunnerName(reg)}</strong>
+                                      {reg.bibNumber
+                                        ? ` (dorsal #${reg.bibNumber})`
+                                        : ""}. Esta acción no se puede
+                                      deshacer.
+                                    </AlertDialogDescription>
+                                  </AlertDialogHeader>
+                                  <AlertDialogFooter>
+                                    <AlertDialogCancel>
+                                      Cancelar
+                                    </AlertDialogCancel>
+                                    <AlertDialogAction
+                                      className="bg-red-600 text-white hover:bg-red-700"
+                                      onClick={() => handleDelete(reg.id)}
+                                    >
+                                      Eliminar
+                                    </AlertDialogAction>
+                                  </AlertDialogFooter>
+                                </AlertDialogContent>
+                              </AlertDialog>
                             </div>
                           </TableCell>
                         </TableRow>

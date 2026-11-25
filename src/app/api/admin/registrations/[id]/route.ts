@@ -87,6 +87,36 @@ export async function PUT(
   }
 }
 
+export async function DELETE(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    const authError = requireAuth(request);
+    if (authError) return authError;
+
+    const { id } = await params;
+
+    // Verificar que existe antes de borrar (para dar 404 claro)
+    const existing = await db.registration.findUnique({ where: { id } });
+    if (!existing) {
+      return NextResponse.json(
+        { error: "Inscripción no encontrada" },
+        { status: 404 }
+      );
+    }
+
+    await db.registration.delete({ where: { id } });
+
+    return NextResponse.json({ ok: true, deletedId: id });
+  } catch {
+    return NextResponse.json(
+      { error: "Error al eliminar inscripción" },
+      { status: 500 }
+    );
+  }
+}
+
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
