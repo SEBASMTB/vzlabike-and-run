@@ -29,9 +29,14 @@ import {
   Droplets,
   Trash2,
   Users,
+  Landmark,
+  Zap,
+  KeyRound,
+  ClipboardList,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -70,6 +75,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { cn } from "@/lib/utils";
 import { useToast } from "@/hooks/use-toast";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-accounts";
 
 // ============================================================
 // Types
@@ -104,10 +110,14 @@ interface Registration {
   category: { id: string; name: string } | null;
   categoryId: string;
   bibNumber: number | null;
+  bibBoxLabel?: string | null;
+  rejectReason?: string | null;
   chipCode: string | null;
   shirtSize: string | null;
   hasShirt: boolean;
   totalAmount: number;
+  totalAmountBs?: number;
+  bcvRate?: number;
   paymentMethod: string;
   paymentRef: string;
   paymentProofUrl: string | null;
@@ -138,11 +148,42 @@ interface CategoryData {
   name: string;
 }
 
+interface PaymentRecordUI {
+  id: string;
+  eventId: string | null;
+  eventTitle: string | null;
+  method: string;
+  reference: string;
+  amount: number;
+  currency: string;
+  payerName: string;
+  payerPhone: string;
+  bankName: string;
+  notes: string;
+  status: string; // UNMATCHED | MATCHED | IGNORED
+  matchedRegistrationId: string | null;
+  matchedRegistration: {
+    id: string;
+    firstName: string;
+    lastName: string;
+    idNumber: string;
+    bibNumber: number | null;
+    status: string;
+  } | null;
+  createdAt: string;
+}
+
+interface QuickResult {
+  id: string;
+  bibNumber: number | null;
+  bibBoxLabel: string | null;
+  bibWarning?: string;
+}
+
 const statusColors: Record<string, string> = {
   PENDING: "bg-amber-100 text-amber-700 border-amber-200",
   APPROVED: "bg-emerald-100 text-emerald-700 border-emerald-200",
   REJECTED: "bg-red-100 text-red-700 border-red-200",
-  // Legacy lowercase fallback
   pending: "bg-amber-100 text-amber-700 border-amber-200",
   confirmed: "bg-emerald-100 text-emerald-700 border-emerald-200",
   approved: "bg-emerald-100 text-emerald-700 border-emerald-200",
@@ -204,6 +245,7 @@ function normalizeStatus(status: string): string {
 
 export default function AdminInscripcionesPage() {
   const { toast } = useToast();
+  const [tab, setTab] = useState<"inscripciones" | "pagos">("inscripciones");
   const [registrations, setRegistrations] = useState<Registration[]>([]);
   const [events, setEvents] = useState<EventsData[]>([]);
   const [categories, setCategories] = useState<CategoryData[]>([]);
@@ -211,7 +253,8 @@ export default function AdminInscripcionesPage() {
   const [updating, setUpdating] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const [eventFilter, setEventFilter] = useState("all");
-  const [statusFilter, setStatusFilter] = useState("todos");
+  // Pendientes por defecto: la bandeja de trabajo es revisar los nuevos pagos
+  const [statusFilter, setStatusFilter] = useState("PENDING");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -221,6 +264,51 @@ export default function AdminInscripcionesPage() {
   const [exporting, setExporting] = useState(false);
   const [exportingExcel, setExportingExcel] = useState(false);
   const [deleting, setDeleting] = useState<string | null>(null);
+
+  // ── Acciones masivas ──
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [bulkWorking, setBulkWorking] = useState(false);
+  const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [rejectTargetIds, setRejectTargetIds] = useState<string[]>([]);
+  const [rejectReason, setRejectReason] = useState("");
+
+  // ── Pagos sin Ficha (conciliación) ──
+  const [payments, setPayments] = useState<PaymentRecordUI[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsFilter, setPaymentsFilter] = useState("UNMATCHED");
+  const [payForm, setPayForm] = useState({
+    eventId: "",
+    method: "movil",
+    reference: "",
+    amount: "",
+    currency: "Bs",
+    payerName: "",
+    payerPhone: "",
+    bankName: "",
+    notes: "",
+  });
+  const [paySaving, setPaySaving] = useState(false);
+  const [approvingMatch, setApprovingMatch] = useState<string | null>(null);
+
+  // ── Inscripción rápida en sitio / WhatsApp ──
+  const [quickOpen, setQuickOpen] = useState(false);
+  const [quickSaving, setQuickSaving] = useState(false);
+  const [quickResult, setQuickResult] = useState<QuickResult | null>(null);
+  const [quickCats, setQuickCats] = useState<CategoryData[]>([]);
+  const [quickForm, setQuickForm] = useState({
+    eventId: "",
+    firstName: "",
+    lastName: "",
+    idNumber: "",
+    gender: "",
+    categoryId: "",
+    shirtSize: "",
+    phone: "",
+    email: "",
+    paymentMethod: "efectivo",
+    paymentRef: "",
+    totalAmount: "",
+  });
 
   const fetchEvents = useCallback(async () => {
     try {
@@ -241,7 +329,6 @@ export default function AdminInscripcionesPage() {
       );
       if (res.ok) {
         const data = await res.json();
-        // Handle both EventCategory (raw SQL) and Category (Prisma) formats
         const cats = Array.isArray(data)
           ? data.map((c: Record<string, unknown>) => ({
               id: String(c.id),
@@ -281,6 +368,24 @@ export default function AdminInscripcionesPage() {
     }
   }, [page, eventFilter, statusFilter, categoryFilter, search]);
 
+  const fetchPayments = useCallback(async () => {
+    try {
+      setPaymentsLoading(true);
+      const params = new URLSearchParams();
+      if (paymentsFilter !== "todos") params.set("status", paymentsFilter);
+      if (eventFilter !== "all") params.set("eventId", eventFilter);
+      const res = await fetch(`/api/admin/payments?${params.toString()}`);
+      if (res.ok) {
+        const data = await res.json();
+        setPayments(data.payments || []);
+      }
+    } catch {
+      // Silently handle
+    } finally {
+      setPaymentsLoading(false);
+    }
+  }, [paymentsFilter, eventFilter]);
+
   useEffect(() => {
     fetchEvents();
   }, [fetchEvents]);
@@ -288,6 +393,12 @@ export default function AdminInscripcionesPage() {
   useEffect(() => {
     fetchRegistrations();
   }, [fetchRegistrations]);
+
+  useEffect(() => {
+    if (tab === "pagos") {
+      fetchPayments();
+    }
+  }, [tab, fetchPayments]);
 
   // Fetch categories when event filter changes
   useEffect(() => {
@@ -299,29 +410,81 @@ export default function AdminInscripcionesPage() {
     }
   }, [eventFilter, fetchCategories]);
 
-  const handleStatusUpdate = async (id: string, newStatus: string) => {
+  const handleStatusUpdate = async (id: string, newStatus: string, reason?: string) => {
     setUpdating(id);
     try {
       const res = await fetch(`/api/admin/registrations/${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: newStatus }),
+        body: JSON.stringify({
+          status: newStatus,
+          ...(newStatus === "REJECTED" ? { rejectReason: reason } : {}),
+        }),
       });
+      const data = await res.json().catch(() => null);
       if (res.ok) {
+        const bibMsg =
+          newStatus === "APPROVED" && data?.bibNumber
+            ? ` — Dorsal #${data.bibNumber} asignado (${data.bibBoxLabel || "caja"})`
+            : "";
         toast({
           title: "Estado actualizado",
-          description: `Inscripción ${statusLabels[newStatus] || newStatus}`,
+          description: `Inscripción ${statusLabels[newStatus] || newStatus}${bibMsg}`,
         });
         fetchRegistrations();
+        if (data?.bibWarning) {
+          toast({
+            title: "Atención con el dorsal",
+            description: data.bibWarning,
+            variant: "destructive",
+          });
+        }
+        return true;
       }
+      toast({
+        title: "Error",
+        description: data?.error || "No se pudo actualizar el estado",
+        variant: "destructive",
+      });
+      return false;
     } catch {
       toast({
         title: "Error",
         description: "No se pudo actualizar el estado",
         variant: "destructive",
       });
+      return false;
     } finally {
       setUpdating(null);
+    }
+  };
+
+  const openRejectDialog = (ids: string[]) => {
+    setRejectTargetIds(ids);
+    setRejectReason("");
+    setRejectDialogOpen(true);
+  };
+
+  const confirmReject = async () => {
+    const reason = rejectReason.trim();
+    if (!reason) {
+      toast({
+        title: "Motivo obligatorio",
+        description: "Indica el motivo del rechazo.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setRejectDialogOpen(false);
+
+    if (rejectTargetIds.length === 1) {
+      const okDone = await handleStatusUpdate(rejectTargetIds[0], "REJECTED", reason);
+      if (okDone && selectedReg?.id === rejectTargetIds[0]) {
+        setDetailOpen(false);
+        setSelectedReg(null);
+      }
+    } else {
+      await runBulk("reject", reason);
     }
   };
 
@@ -377,6 +540,79 @@ export default function AdminInscripcionesPage() {
     setPage(1);
   };
 
+  // ── Selección masiva ──
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const selectableIds = registrations
+    .filter((r) => normalizeStatus(r.status) === "PENDING")
+    .map((r) => r.id);
+
+  const toggleSelectAll = () => {
+    const allSelected =
+      selectableIds.length > 0 && selectableIds.every((id) => selectedIds.has(id));
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (allSelected) {
+        selectableIds.forEach((id) => next.delete(id));
+      } else {
+        selectableIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
+  };
+
+  const runBulk = async (action: "approve" | "reject" | "delete", reason?: string) => {
+    const ids = Array.from(selectedIds);
+    if (ids.length === 0) return;
+    setBulkWorking(true);
+    try {
+      const res = await fetch("/api/admin/registrations/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, ids, reason }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        const summary =
+          action === "approve"
+            ? `${data.approved?.length ?? 0} aprobadas con dorsal asignado`
+            : action === "reject"
+            ? `${data.ok ?? 0} rechazadas`
+            : `${data.ok ?? 0} eliminadas`;
+        toast({
+          title: "Acción masiva completada",
+          description: summary + (data.fail ? ` — ${data.fail} fallaron` : ""),
+        });
+        setSelectedIds(new Set());
+        fetchRegistrations();
+      } else {
+        toast({
+          title: "Error",
+          description: data?.error || "La acción masiva falló",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "La acción masiva falló",
+        variant: "destructive",
+      });
+    } finally {
+      setBulkWorking(false);
+    }
+  };
+
+  // ── Exportaciones ──
+
   const handleChuckScoreExport = async () => {
     if (!eventFilter || eventFilter === "all") {
       toast({
@@ -409,7 +645,7 @@ export default function AdminInscripcionesPage() {
 
       toast({
         title: "Exportación exitosa",
-        description: "Archivo ChuckScore descargado",
+        description: "Archivo ChuckScore descargado (solo aprobados, con caja)",
       });
     } catch (error) {
       toast({
@@ -468,6 +704,211 @@ export default function AdminInscripcionesPage() {
     }
   };
 
+  // ── Pagos sin Ficha ──
+
+  const handleSavePayment = async () => {
+    if (!payForm.reference.trim() && !payForm.payerName.trim()) {
+      toast({
+        title: "Falta información",
+        description: "La referencia o el titular son obligatorios.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setPaySaving(true);
+    try {
+      const res = await fetch("/api/admin/payments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...payForm,
+          eventId: payForm.eventId || null,
+          amount: parseFloat(payForm.amount) || 0,
+        }),
+      });
+      if (res.ok) {
+        toast({
+          title: "Pago registrado",
+          description: "Cuando llegue la inscripción con esa referencia se concilia automáticamente.",
+        });
+        setPayForm({
+          eventId: eventFilter !== "all" ? eventFilter : "",
+          method: "movil",
+          reference: "",
+          amount: "",
+          currency: "Bs",
+          payerName: "",
+          payerPhone: "",
+          bankName: "",
+          notes: "",
+        });
+        fetchPayments();
+      } else {
+        const err = await res.json().catch(() => null);
+        toast({
+          title: "Error",
+          description: err?.error || "No se pudo registrar el pago",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo registrar el pago",
+        variant: "destructive",
+      });
+    } finally {
+      setPaySaving(false);
+    }
+  };
+
+  const handleIgnorePayment = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/payments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "IGNORED" }),
+      });
+      if (res.ok) {
+        fetchPayments();
+      }
+    } catch {
+      // Silently handle
+    }
+  };
+
+  const handleDeletePayment = async (id: string) => {
+    try {
+      const res = await fetch(`/api/admin/payments/${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        toast({ title: "Pago eliminado" });
+        fetchPayments();
+      }
+    } catch {
+      // Silently handle
+    }
+  };
+
+  /** Aprobación de 1 clic para la inscripción conciliada */
+  const handleApproveMatched = async (payment: PaymentRecordUI) => {
+    if (!payment.matchedRegistrationId) return;
+    setApprovingMatch(payment.id);
+    const okDone = await handleStatusUpdate(
+      payment.matchedRegistrationId,
+      "APPROVED"
+    );
+    if (okDone) {
+      fetchPayments();
+    }
+    setApprovingMatch(null);
+  };
+
+  // ── Inscripción rápida en sitio / WhatsApp ──
+
+  const openQuickDialog = () => {
+    setQuickResult(null);
+    setQuickCats([]);
+    setQuickForm({
+      eventId: eventFilter !== "all" ? eventFilter : "",
+      firstName: "",
+      lastName: "",
+      idNumber: "",
+      gender: "",
+      categoryId: "",
+      shirtSize: "",
+      phone: "",
+      email: "",
+      paymentMethod: "efectivo",
+      paymentRef: "",
+      totalAmount: "",
+    });
+    setQuickOpen(true);
+  };
+
+  // Al cambiar el evento en el dialog rápido, cargar sus categorías
+  useEffect(() => {
+    if (quickOpen && quickForm.eventId) {
+      (async () => {
+        try {
+          const res = await fetch(
+            `/api/admin/events/${quickForm.eventId}/categories`
+          );
+          if (res.ok) {
+            const data = await res.json();
+            setQuickCats(
+              Array.isArray(data)
+                ? data.map((c: Record<string, unknown>) => ({
+                    id: String(c.id),
+                    name: String(c.name),
+                  }))
+                : []
+            );
+          }
+        } catch {
+          setQuickCats([]);
+        }
+      })();
+    } else {
+      setQuickCats([]);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quickOpen, quickForm.eventId]);
+
+  const handleQuickSubmit = async () => {
+    if (!quickForm.eventId || !quickForm.firstName.trim() || !quickForm.lastName.trim() || !quickForm.idNumber.trim()) {
+      toast({
+        title: "Faltan datos",
+        description: "Evento, nombre, apellido y cédula son obligatorios.",
+        variant: "destructive",
+      });
+      return;
+    }
+    setQuickSaving(true);
+    try {
+      const res = await fetch("/api/admin/registrations/quick", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...quickForm,
+          totalAmount: parseFloat(quickForm.totalAmount) || undefined,
+        }),
+      });
+      const data = await res.json().catch(() => null);
+      if (res.ok) {
+        setQuickResult({
+          id: data.id,
+          bibNumber: data.bibNumber ?? null,
+          bibBoxLabel: data.bibBoxLabel ?? null,
+          bibWarning: data.bibWarning,
+        });
+        toast({
+          title: "Inscripción rápida creada",
+          description:
+            data.bibNumber != null
+              ? `Aprobada con dorsal #${data.bibNumber} — ${data.bibBoxLabel || ""}`
+              : "Aprobada (dorsal pendiente de asignación)",
+        });
+        fetchRegistrations();
+      } else {
+        toast({
+          title: "Error",
+          description: data?.error || "No se pudo crear la inscripción",
+          variant: "destructive",
+        });
+      }
+    } catch {
+      toast({
+        title: "Error",
+        description: "No se pudo crear la inscripción",
+        variant: "destructive",
+      });
+    } finally {
+      setQuickSaving(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -477,10 +918,18 @@ export default function AdminInscripcionesPage() {
             Gestión de Inscripciones
           </h1>
           <p className="text-muted-foreground mt-1">
-            Revisa y gestiona las inscripciones de los participantes
+            Revisa, aprueba y concilia las inscripciones de los participantes
           </p>
         </div>
         <div className="flex flex-col sm:flex-row sm:items-center gap-2 shrink-0">
+          <Button
+            variant="outline"
+            className="border-amber-200 text-amber-700 hover:bg-amber-50 shrink-0"
+            onClick={openQuickDialog}
+          >
+            <Zap className="size-4" />
+            Inscripción rápida en sitio
+          </Button>
           {eventFilter !== "all" && (
             <Button
               variant="outline"
@@ -527,6 +976,43 @@ export default function AdminInscripcionesPage() {
         </div>
       </div>
 
+      {/* Tabs: Inscripciones | Pagos sin Ficha */}
+      <div className="flex gap-2 border-b">
+        <button
+          type="button"
+          onClick={() => setTab("inscripciones")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+            tab === "inscripciones"
+              ? "border-red-600 text-red-600"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <ClipboardList className="size-4" />
+          Inscripciones
+        </button>
+        <button
+          type="button"
+          onClick={() => setTab("pagos")}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+            tab === "pagos"
+              ? "border-red-600 text-red-600"
+              : "border-transparent text-muted-foreground hover:text-foreground"
+          )}
+        >
+          <Landmark className="size-4" />
+          Pagos sin Ficha
+          {payments.filter((p) => p.status === "UNMATCHED").length > 0 && (
+            <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">
+              {payments.filter((p) => p.status === "UNMATCHED").length}
+            </Badge>
+          )}
+        </button>
+      </div>
+
+      {tab === "inscripciones" ? (
+        <>
       {/* Filters */}
       <div className="bg-white rounded-xl border shadow-sm p-4">
         <div className="flex flex-col sm:flex-row gap-3">
@@ -569,10 +1055,10 @@ export default function AdminInscripcionesPage() {
               <SelectValue placeholder="Todos los estados" />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="PENDING">Pendientes</SelectItem>
+              <SelectItem value="APPROVED">Aprobados</SelectItem>
+              <SelectItem value="REJECTED">Rechazados</SelectItem>
               <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="PENDING">Pendiente</SelectItem>
-              <SelectItem value="APPROVED">Aprobado</SelectItem>
-              <SelectItem value="REJECTED">Rechazado</SelectItem>
             </SelectContent>
           </Select>
 
@@ -597,11 +1083,67 @@ export default function AdminInscripcionesPage() {
           )}
         </div>
 
-        {/* Results count */}
-        <p className="text-xs text-muted-foreground mt-3">
-          {total} {total === 1 ? "resultado" : "resultados"} encontrados
-        </p>
+        <div className="flex items-center justify-between gap-2 mt-3">
+          <p className="text-xs text-muted-foreground">
+            {total} {total === 1 ? "resultado" : "resultados"} encontrados
+          </p>
+          {statusFilter !== "todos" && (
+            <button
+              type="button"
+              onClick={() => setStatusFilter("todos")}
+              className="text-xs text-muted-foreground underline hover:text-foreground"
+            >
+              Ver todos los estados
+            </button>
+          )}
+        </div>
       </div>
+
+      {/* Barra de acciones masivas */}
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-red-200 bg-red-50/70 px-4 py-3">
+          <span className="text-sm font-semibold text-red-700">
+            {selectedIds.size} seleccionada{selectedIds.size === 1 ? "" : "s"}
+          </span>
+          <div className="flex flex-wrap items-center gap-2 ml-auto">
+            <Button
+              size="sm"
+              disabled={bulkWorking}
+              onClick={() => runBulk("approve")}
+              className="bg-emerald-600 text-white hover:bg-emerald-700 border-0"
+            >
+              {bulkWorking ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <CheckCircle className="size-4" />
+              )}
+              Aprobar y asignar dorsales
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bulkWorking}
+              className="border-red-300 text-red-600 hover:bg-red-100"
+              onClick={() => openRejectDialog(Array.from(selectedIds))}
+            >
+              <XCircle className="size-4" />
+              Rechazar con motivo
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              disabled={bulkWorking}
+              className="border-gray-300 text-gray-600 hover:bg-gray-100"
+              onClick={() => {
+                setSelectedIds(new Set());
+              }}
+            >
+              <X className="size-4" />
+              Deseleccionar
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Table */}
       <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
@@ -617,6 +1159,19 @@ export default function AdminInscripcionesPage() {
               <Table>
                 <TableHeader>
                   <TableRow>
+                    <TableHead className="text-xs w-10">
+                      <input
+                        type="checkbox"
+                        aria-label="Seleccionar pendientes de la página"
+                        checked={
+                          selectableIds.length > 0 &&
+                          selectableIds.every((id) => selectedIds.has(id))
+                        }
+                        onChange={toggleSelectAll}
+                        disabled={selectableIds.length === 0}
+                        className="size-4 accent-red-600"
+                      />
+                    </TableHead>
                     <TableHead className="text-xs w-12">Dorsal</TableHead>
                     <TableHead className="text-xs">Nombre</TableHead>
                     <TableHead className="text-xs hidden md:table-cell">
@@ -641,7 +1196,7 @@ export default function AdminInscripcionesPage() {
                   {registrations.length === 0 ? (
                     <TableRow>
                       <TableCell
-                        colSpan={8}
+                        colSpan={9}
                         className="text-center py-12 text-muted-foreground"
                       >
                         No se encontraron inscripciones
@@ -650,8 +1205,23 @@ export default function AdminInscripcionesPage() {
                   ) : (
                     registrations.map((reg) => {
                       const normStatus = normalizeStatus(reg.status);
+                      const isSelected = selectedIds.has(reg.id);
                       return (
-                        <TableRow key={reg.id}>
+                        <TableRow
+                          key={reg.id}
+                          className={cn(isSelected && "bg-red-50/50")}
+                        >
+                          <TableCell>
+                            {normStatus === "PENDING" ? (
+                              <input
+                                type="checkbox"
+                                aria-label={`Seleccionar inscripción de ${getRunnerName(reg)}`}
+                                checked={isSelected}
+                                onChange={() => toggleSelect(reg.id)}
+                                className="size-4 accent-red-600"
+                              />
+                            ) : null}
+                          </TableCell>
                           <TableCell className="font-mono text-sm font-bold text-muted-foreground">
                             {reg.bibNumber || "—"}
                           </TableCell>
@@ -677,22 +1247,37 @@ export default function AdminInscripcionesPage() {
                             {reg.event?.title || "—"}
                           </TableCell>
                           <TableCell className="hidden xl:table-cell text-sm">
-                            {reg.paymentMethod || "—"}
+                            <div className="flex flex-col">
+                              <span>{reg.paymentMethod || "—"}</span>
+                              {reg.paymentRef && (
+                                <span className="text-[10px] text-muted-foreground font-mono">
+                                  ref {reg.paymentRef}
+                                </span>
+                              )}
+                            </div>
                           </TableCell>
                           <TableCell>
-                            <Badge
-                              variant="outline"
-                              className={cn(
-                                "text-xs whitespace-nowrap",
-                                statusColors[normStatus] ||
-                                  statusColors[reg.status] ||
-                                  ""
-                              )}
-                            >
-                              {statusLabels[normStatus] ||
-                                statusLabels[reg.status] ||
-                                reg.status}
-                            </Badge>
+                            <div className="flex flex-col gap-1">
+                              <Badge
+                                variant="outline"
+                                className={cn(
+                                  "text-xs whitespace-nowrap",
+                                  statusColors[normStatus] ||
+                                    statusColors[reg.status] ||
+                                    ""
+                                )}
+                              >
+                                {statusLabels[normStatus] ||
+                                  statusLabels[reg.status] ||
+                                  reg.status}
+                              </Badge>
+                              {reg.bibNumber && reg.bibBoxLabel ? (
+                                <span className="text-[10px] text-muted-foreground whitespace-nowrap">
+                                  <KeyRound className="inline size-3 mr-0.5" />
+                                  {reg.bibBoxLabel}
+                                </span>
+                              ) : null}
+                            </div>
                           </TableCell>
                           <TableCell>
                             <div className="flex items-center justify-end gap-1">
@@ -706,7 +1291,8 @@ export default function AdminInscripcionesPage() {
                                       handleStatusUpdate(reg.id, "APPROVED")
                                     }
                                     disabled={updating === reg.id}
-                                    aria-label="Aprobar inscripción"
+                                    aria-label="Aprobar inscripción y asignar dorsal"
+                                    title="Aprobar (asigna dorsal + caja)"
                                   >
                                     {updating === reg.id ? (
                                       <Loader2 className="size-4 animate-spin" />
@@ -718,11 +1304,10 @@ export default function AdminInscripcionesPage() {
                                     variant="ghost"
                                     size="icon"
                                     className="size-8 text-muted-foreground hover:text-red-600"
-                                    onClick={() =>
-                                      handleStatusUpdate(reg.id, "REJECTED")
-                                    }
+                                    onClick={() => openRejectDialog([reg.id])}
                                     disabled={updating === reg.id}
-                                    aria-label="Rechazar inscripción"
+                                    aria-label="Rechazar inscripción con motivo"
+                                    title="Rechazar (motivo obligatorio)"
                                   >
                                     <XCircle className="size-4" />
                                   </Button>
@@ -825,6 +1410,596 @@ export default function AdminInscripcionesPage() {
           </>
         )}
       </div>
+        </>
+      ) : (
+        /* ══════════════════════════════════════════════════════ */
+        /* BANDEJA: PAGOS SIN FICHA / CONCILIACIÓN BANCARIA        */
+        /* ══════════════════════════════════════════════════════ */
+        <div className="space-y-4">
+          {/* Formulario rápido de registro de pago */}
+          <div className="bg-white rounded-xl border shadow-sm p-4 space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="flex size-8 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+                <Landmark className="size-4" />
+              </div>
+              <div>
+                <h2 className="text-sm font-bold">Registrar pago detectado en el banco</h2>
+                <p className="text-xs text-muted-foreground">
+                  Anota en segundos transferencias o pagos móviles de personas que aún no llenan el
+                  formulario — no consumen dorsales. Si luego llega una inscripción con esa referencia, se
+                  concilia sola.
+                </p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs">Evento</Label>
+                <Select
+                  value={payForm.eventId || "ninguno"}
+                  onValueChange={(v) =>
+                    setPayForm((f) => ({ ...f, eventId: v === "ninguno" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Sin evento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ninguno">Sin evento específico</SelectItem>
+                    {events.map((ev) => (
+                      <SelectItem key={ev.id} value={ev.id}>
+                        {ev.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Método</Label>
+                <Select
+                  value={payForm.method}
+                  onValueChange={(v) => setPayForm((f) => ({ ...f, method: v }))}
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([id, label]) => (
+                      <SelectItem key={id} value={id}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Referencia *</Label>
+                <Input
+                  value={payForm.reference}
+                  onChange={(e) =>
+                    setPayForm((f) => ({ ...f, reference: e.target.value }))
+                  }
+                  placeholder="Ej. 00881234"
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-xs">Monto</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    value={payForm.amount}
+                    onChange={(e) =>
+                      setPayForm((f) => ({ ...f, amount: e.target.value }))
+                    }
+                    placeholder="0.00"
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Moneda</Label>
+                  <Select
+                    value={payForm.currency}
+                    onValueChange={(v) =>
+                      setPayForm((f) => ({ ...f, currency: v }))
+                    }
+                  >
+                    <SelectTrigger className="h-8 text-sm">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Bs">Bs</SelectItem>
+                      <SelectItem value="USD">USD</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="space-y-1 md:col-span-2">
+                <Label className="text-xs">Titular / teléfono</Label>
+                <Input
+                  value={payForm.payerName}
+                  onChange={(e) =>
+                    setPayForm((f) => ({ ...f, payerName: e.target.value }))
+                  }
+                  placeholder="Nombre del que pagó"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Teléfono</Label>
+                <Input
+                  value={payForm.payerPhone}
+                  onChange={(e) =>
+                    setPayForm((f) => ({ ...f, payerPhone: e.target.value }))
+                  }
+                  placeholder="0412-1234567"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Banco</Label>
+                <Input
+                  value={payForm.bankName}
+                  onChange={(e) =>
+                    setPayForm((f) => ({ ...f, bankName: e.target.value }))
+                  }
+                  placeholder="Ej. Banesco"
+                  className="h-8 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                onClick={handleSavePayment}
+                disabled={paySaving}
+                className="gradient-primary text-white border-0"
+              >
+                {paySaving ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Landmark className="size-4" />
+                )}
+                Registrar pago sin ficha
+              </Button>
+            </div>
+          </div>
+
+          {/* Lista de pagos */}
+          <div className="bg-white rounded-xl border shadow-sm overflow-hidden">
+            <div className="flex items-center justify-between gap-2 border-b px-4 py-2">
+              <div className="flex items-center gap-2 text-xs">
+                {["UNMATCHED", "MATCHED", "IGNORED", "todos"].map((f) => (
+                  <button
+                    key={f}
+                    type="button"
+                    onClick={() => setPaymentsFilter(f)}
+                    className={cn(
+                      "px-2 py-1 rounded-md font-medium transition-colors",
+                      paymentsFilter === f
+                        ? "bg-red-50 text-red-600"
+                        : "text-muted-foreground hover:bg-gray-50"
+                    )}
+                  >
+                    {f === "UNMATCHED"
+                      ? "Sin conciliar"
+                      : f === "MATCHED"
+                      ? "Conciliados"
+                      : f === "IGNORED"
+                      ? "Ignorados"
+                      : "Todos"}
+                  </button>
+                ))}
+              </div>
+            </div>
+            {paymentsLoading ? (
+              <div className="p-6 space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </div>
+            ) : payments.length === 0 ? (
+              <div className="py-10 text-center text-sm text-muted-foreground">
+                No hay pagos en esta bandeja
+              </div>
+            ) : (
+              <div className="divide-y">
+                {payments.map((p) => (
+                  <div
+                    key={p.id}
+                    className="flex flex-col md:flex-row md:items-center gap-2 px-4 py-3"
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <span className="font-mono text-sm font-bold">
+                          {p.reference || "—"}
+                        </span>
+                        <Badge
+                          variant="outline"
+                          className={cn(
+                            "text-[10px]",
+                            p.status === "UNMATCHED" &&
+                              "bg-amber-100 text-amber-700 border-amber-200",
+                            p.status === "MATCHED" &&
+                              "bg-emerald-100 text-emerald-700 border-emerald-200",
+                            p.status === "IGNORED" &&
+                              "bg-gray-100 text-gray-500 border-gray-200"
+                          )}
+                        >
+                          {p.status === "UNMATCHED"
+                            ? "Sin conciliar"
+                            : p.status === "MATCHED"
+                            ? "Conciliado"
+                            : "Ignorado"}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          {PAYMENT_METHOD_LABELS[p.method] || p.method}
+                          {p.bankName ? ` · ${p.bankName}` : ""}
+                        </span>
+                        {p.eventTitle && (
+                          <span className="text-xs text-muted-foreground">
+                            · {p.eventTitle}
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                        {p.payerName || "Titular desconocido"}
+                        {p.payerPhone ? ` · ${p.payerPhone}` : ""}
+                        {p.notes ? ` · ${p.notes}` : ""}
+                        {` · ${formatDate(p.createdAt)}`}
+                      </p>
+                      {p.status === "MATCHED" && p.matchedRegistration && (
+                        <p className="text-xs text-emerald-700 mt-0.5">
+                          Inscripción: {p.matchedRegistration.firstName}{" "}
+                          {p.matchedRegistration.lastName} (
+                          {p.matchedRegistration.idNumber}) —{" "}
+                          {statusLabels[normalizeStatus(p.matchedRegistration.status)] ||
+                            p.matchedRegistration.status}
+                          {p.matchedRegistration.bibNumber
+                            ? ` · Dorsal #${p.matchedRegistration.bibNumber}`
+                            : ""}
+                        </p>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {p.amount > 0 && (
+                        <span className="text-sm font-semibold whitespace-nowrap">
+                          {p.amount.toLocaleString("es-VE", {
+                            minimumFractionDigits: 2,
+                          })}{" "}
+                          {p.currency}
+                        </span>
+                      )}
+                      {p.status === "MATCHED" &&
+                        p.matchedRegistration &&
+                        normalizeStatus(p.matchedRegistration.status) ===
+                          "PENDING" && (
+                          <Button
+                            size="sm"
+                            className="bg-emerald-600 text-white hover:bg-emerald-700 border-0"
+                            disabled={approvingMatch === p.id || updating === p.matchedRegistrationId}
+                            onClick={() => handleApproveMatched(p)}
+                            title="Aprobar inscripción conciliada (asigna dorsal + caja)"
+                          >
+                            {approvingMatch === p.id ? (
+                              <Loader2 className="size-4 animate-spin" />
+                            ) : (
+                              <Zap className="size-4" />
+                            )}
+                            Aprobar + dorsal
+                          </Button>
+                        )}
+                      {p.status === "UNMATCHED" && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleIgnorePayment(p.id)}
+                          title="Marcar como ignorado"
+                        >
+                          <Ban className="size-4" />
+                        </Button>
+                      )}
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="text-red-600 hover:bg-red-50"
+                            aria-label="Eliminar pago"
+                          >
+                            <Trash2 className="size-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>¿Eliminar pago?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Se eliminará el registro de conciliación{" "}
+                              <strong>{p.reference || p.payerName}</strong>.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                            <AlertDialogAction
+                              className="bg-red-600 text-white hover:bg-red-700"
+                              onClick={() => handleDeletePayment(p.id)}
+                            >
+                              Eliminar
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Dialog: rechazo con motivo obligatorio */}
+      <Dialog
+        open={rejectDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) setRejectDialogOpen(false);
+        }}
+      >
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Rechazar inscripción</DialogTitle>
+            <DialogDescription>
+              {rejectTargetIds.length === 1
+                ? "Indica el motivo del rechazo (obligatorio). El dorsal asignado se libera."
+                : `Vas a rechazar ${rejectTargetIds.length} inscripciones. Indica el motivo (obligatorio).`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3 py-2">
+            <div className="space-y-1.5">
+              <Label htmlFor="rejectReason">Motivo del rechazo *</Label>
+              <Input
+                id="rejectReason"
+                value={rejectReason}
+                onChange={(e) => setRejectReason(e.target.value)}
+                placeholder="Ej. Comprobante ilegible / pago no localizado"
+                autoFocus
+              />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setRejectDialogOpen(false)}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="bg-red-600 text-white hover:bg-red-700 border-0"
+                onClick={confirmReject}
+              >
+                <XCircle className="size-4" />
+                Rechazar
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog: inscripción rápida en sitio / WhatsApp */}
+      <Dialog open={quickOpen} onOpenChange={setQuickOpen}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Inscripción rápida en sitio / WhatsApp</DialogTitle>
+            <DialogDescription>
+              Para atletas que pagan en la puerta o por WhatsApp: nace aprobada
+              con dorsal y caja asignados al instante.
+            </DialogDescription>
+          </DialogHeader>
+
+          {quickResult ? (
+            <div className="space-y-4 py-2">
+              <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4 text-center">
+                <CheckCircle className="mx-auto size-8 text-emerald-600" />
+                <p className="mt-2 text-sm font-semibold text-emerald-800">
+                  Inscripción creada y aprobada
+                </p>
+                {quickResult.bibNumber != null ? (
+                  <p className="mt-1 text-2xl font-bold text-gray-900">
+                    Dorsal #{quickResult.bibNumber}
+                    <span className="ml-2 text-sm font-medium text-gray-600">
+                      {quickResult.bibBoxLabel}
+                    </span>
+                  </p>
+                ) : (
+                  <p className="mt-1 text-sm text-amber-700">
+                    {quickResult.bibWarning || "Dorsal pendiente de asignación"}
+                  </p>
+                )}
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" onClick={() => setQuickOpen(false)}>
+                  Cerrar
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3 py-2">
+              <div className="space-y-1 md:col-span-2">
+                <Label className="text-xs">Evento *</Label>
+                <Select
+                  value={quickForm.eventId || "ninguno"}
+                  onValueChange={(v) =>
+                    setQuickForm((f) => ({
+                      ...f,
+                      eventId: v === "ninguno" ? "" : v,
+                      categoryId: "",
+                    }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Selecciona el evento" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ninguno" disabled>
+                      Selecciona el evento
+                    </SelectItem>
+                    {events.map((ev) => (
+                      <SelectItem key={ev.id} value={ev.id}>
+                        {ev.title}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Nombre *</Label>
+                <Input
+                  value={quickForm.firstName}
+                  onChange={(e) =>
+                    setQuickForm((f) => ({ ...f, firstName: e.target.value }))
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Apellido *</Label>
+                <Input
+                  value={quickForm.lastName}
+                  onChange={(e) =>
+                    setQuickForm((f) => ({ ...f, lastName: e.target.value }))
+                  }
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Cédula *</Label>
+                <Input
+                  value={quickForm.idNumber}
+                  onChange={(e) =>
+                    setQuickForm((f) => ({ ...f, idNumber: e.target.value }))
+                  }
+                  placeholder="V-12345678"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Género</Label>
+                <Select
+                  value={quickForm.gender || "n/a"}
+                  onValueChange={(v) =>
+                    setQuickForm((f) => ({ ...f, gender: v === "n/a" ? "" : v }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="—" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="n/a">—</SelectItem>
+                    <SelectItem value="M">Masculino</SelectItem>
+                    <SelectItem value="F">Femenino</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Categoría</Label>
+                <Select
+                  value={quickForm.categoryId || "sin-cat"}
+                  onValueChange={(v) =>
+                    setQuickForm((f) => ({
+                      ...f,
+                      categoryId: v === "sin-cat" ? "" : v,
+                    }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue placeholder="Sin categoría" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="sin-cat">Sin categoría</SelectItem>
+                    {quickCats.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Teléfono</Label>
+                <Input
+                  value={quickForm.phone}
+                  onChange={(e) =>
+                    setQuickForm((f) => ({ ...f, phone: e.target.value }))
+                  }
+                  placeholder="0412-1234567"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Método de pago</Label>
+                <Select
+                  value={quickForm.paymentMethod}
+                  onValueChange={(v) =>
+                    setQuickForm((f) => ({ ...f, paymentMethod: v }))
+                  }
+                >
+                  <SelectTrigger className="h-8 text-sm">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="efectivo">Efectivo</SelectItem>
+                    {Object.entries(PAYMENT_METHOD_LABELS).map(([id, label]) => (
+                      <SelectItem key={id} value={id}>
+                        {label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Referencia</Label>
+                <Input
+                  value={quickForm.paymentRef}
+                  onChange={(e) =>
+                    setQuickForm((f) => ({ ...f, paymentRef: e.target.value }))
+                  }
+                  className="h-8 text-sm font-mono"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs">Monto (USD)</Label>
+                <Input
+                  type="number"
+                  step="0.01"
+                  value={quickForm.totalAmount}
+                  onChange={(e) =>
+                    setQuickForm((f) => ({ ...f, totalAmount: e.target.value }))
+                  }
+                  placeholder="Precio del evento por omisión"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="flex justify-end gap-2 md:col-span-2 pt-2">
+                <Button variant="outline" onClick={() => setQuickOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button
+                  onClick={handleQuickSubmit}
+                  disabled={quickSaving}
+                  className="gradient-primary text-white border-0"
+                >
+                  {quickSaving ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <Zap className="size-4" />
+                  )}
+                  Crear y aprobar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
 
       {/* Detail Dialog */}
       <Dialog open={detailOpen} onOpenChange={setDetailOpen}>
@@ -839,7 +2014,7 @@ export default function AdminInscripcionesPage() {
           {selectedReg && (
             <div className="space-y-4 py-2">
               {/* Status & Bib */}
-              <div className="flex items-center gap-3">
+              <div className="flex flex-wrap items-center gap-3">
                 <Badge
                   variant="outline"
                   className={cn(
@@ -851,11 +2026,26 @@ export default function AdminInscripcionesPage() {
                     selectedReg.status}
                 </Badge>
                 {selectedReg.bibNumber && (
-                  <Badge variant="secondary" className="text-sm">
-                    Dorsal #{selectedReg.bibNumber}
-                  </Badge>
+                  <>
+                    <Badge variant="secondary" className="text-sm">
+                      Dorsal #{selectedReg.bibNumber}
+                    </Badge>
+                    {selectedReg.bibBoxLabel && (
+                      <Badge variant="outline" className="text-xs border-blue-200 text-blue-700 bg-blue-50">
+                        <KeyRound className="mr-1 size-3" />
+                        {selectedReg.bibBoxLabel}
+                      </Badge>
+                    )}
+                  </>
                 )}
               </div>
+
+              {normalizeStatus(selectedReg.status) === "REJECTED" &&
+                selectedReg.rejectReason && (
+                  <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    <strong>Motivo del rechazo:</strong> {selectedReg.rejectReason}
+                  </div>
+                )}
 
               <Separator />
 
@@ -1090,13 +2280,12 @@ export default function AdminInscripcionesPage() {
                     ) : (
                       <CheckCircle className="size-4" />
                     )}
-                    Aprobar
+                    Aprobar (asigna dorsal)
                   </Button>
                   <Button
                     variant="destructive"
                     onClick={() => {
-                      handleStatusUpdate(selectedReg.id, "REJECTED");
-                      setDetailOpen(false);
+                      openRejectDialog([selectedReg.id]);
                     }}
                     disabled={updating === selectedReg.id}
                     className="flex-1"

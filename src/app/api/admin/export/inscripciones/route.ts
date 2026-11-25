@@ -85,7 +85,7 @@ export async function GET(request: NextRequest) {
               r.gender, r.dateOfBirth, r.shirtSize, r.hasShirt, r.status,
               r.createdAt, r.paymentMethod, r.paymentRef,
               r.totalAmount, r.totalAmountBs, r.bcvRate,
-              r.bibNumber, r.category, r.team, r.club,
+              r.bibNumber, r.bibBoxLabel, r.rejectReason, r.category, r.team, r.club,
               r.estado, r.ciudad,
               r.emergName, r.emergPhone, r.emergRelation,
               r.emergencyContact, r.emergencyPhone,
@@ -118,6 +118,7 @@ export async function GET(request: NextRequest) {
 
     const headers = [
       "Dorsal",
+      "Caja de Retiro",
       "Cédula",
       "Nombre",
       "Apellido",
@@ -142,6 +143,7 @@ export async function GET(request: NextRequest) {
       "Evento",
       "Fecha de Inscripción",
       "Estado Inscripción",
+      "Motivo de Rechazo",
       "Responsabilidad",
     ];
 
@@ -161,6 +163,7 @@ export async function GET(request: NextRequest) {
       const nombreCat = r.categoryName || r.category || "";
       const row = sheet.addRow([
         r.bibNumber ?? "",
+        r.bibBoxLabel || "",
         r.idNumber || "",
         r.firstName || "",
         r.lastName || "",
@@ -185,6 +188,7 @@ export async function GET(request: NextRequest) {
         r.eventTitle || "",
         formatDateTime(r.createdAt),
         STATUS_LABELS[String(r.status || "").toUpperCase()] || r.status || "",
+        r.rejectReason || "",
         r.waiverAccepted ? "Sí" : "No",
       ]);
 
@@ -201,8 +205,8 @@ export async function GET(request: NextRequest) {
 
       // Fecha de nacimiento y fecha de inscripción como texto (evita
       // que Excel las reinterprete como fechas seriales)
-      row.getCell(6).numFmt = "@";
-      row.getCell(24).numFmt = "@";
+      row.getCell(7).numFmt = "@";
+      row.getCell(25).numFmt = "@";
     }
 
     // Ancho automático (tope 34) y encabezado congelado

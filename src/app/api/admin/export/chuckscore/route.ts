@@ -11,11 +11,12 @@
  *
  * Columnas: Bib | Chip | First Name | Last Name | DOB (DD/MM/YYYY) |
  *           Gender | Category | Team | City | Phone |
- *           Emergency Contact | Emergency Phone | Blood Type
+ *           Emergency Contact | Emergency Phone | Blood Type | Kit Box
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { bibBoxLabel } from "@/lib/payment-accounts";
 import ExcelJS from "exceljs";
 
 /** Formatea Date como DD/MM/YYYY (ChuckScore/IPICO standard) */
@@ -46,10 +47,10 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ── Obtener evento ─────────────────────────────────────
+    // ── Obtener evento (incluye tamaño de caja física) ─────
     const event = await db.event.findUnique({
       where: { id: eventId },
-      select: { id: true, title: true, slug: true },
+      select: { id: true, title: true, slug: true, bibBoxSize: true },
     });
 
     if (!event) {
@@ -59,7 +60,7 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // ── Obtener inscripciones aprobadas/pendientes con datos del runner ──
+    // ── Obtener SOLO inscripciones APROBADAS (dorsal asignado) ──
     // Raw SQL con JOINs (patrón probado en producción); los includes de
     // Prisma fallan porque la relación de categoría se llama categoryRef.
     const eventIdSafe = eventId.replace(/'/g, "''");
@@ -67,7 +68,7 @@ export async function GET(request: NextRequest) {
       `SELECT r.id, r.firstName, r.lastName, r.dateOfBirth, r.gender,
               r.category, r.team, r.ciudad, r.phone,
               r.emergencyContact, r.emergencyPhone, r.emergName, r.emergPhone,
-              r.bibNumber, r.chipCode,
+              r.bibNumber, r.chipCode, r.bibBoxLabel,
               run.nombres AS runnerNombres, run.apellidos AS runnerApellidos,
               run.fechaNacimiento AS runnerFechaNacimiento,
               run.genero AS runnerGenero, run.team AS runnerTeam,
@@ -80,8 +81,8 @@ export async function GET(request: NextRequest) {
        LEFT JOIN Runner run ON r.runnerId = run.id
        LEFT JOIN Category c ON r.categoryId = c.id
        WHERE r.eventId = '${eventIdSafe}'
-         AND LOWER(r.status) IN ('pending', 'approved', 'confirmed')
-       ORDER BY (r.bibNumber IS NULL), r.bibNumber ASC, r.createdAt ASC`
+         AND UPPER(r.status) = 'APPROVED'
+       ORDER BY r.bibNumber ASC, r.createdAt ASC`
     ) as any[];
 
     if (registrations.length === 0) {
@@ -102,7 +103,7 @@ export async function GET(request: NextRequest) {
       },
     });
 
-    // ── Headers (orden exacto ChuckScore) ───────────────────
+    // ── Headers (orden exacto ChuckScore + caja física al final) ──
     const headers = [
       "Bib",
       "Chip",
@@ -117,6 +118,7 @@ export async function GET(request: NextRequest) {
       "Emergency Contact",
       "Emergency Phone",
       "Blood Type",
+      "Kit Box",
     ];
 
     // Header row with styling
