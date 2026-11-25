@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import Link from "next/link";
+import { formatEventDateShort } from "@/lib/date-utils";
 import {
   Plus,
   Pencil,
@@ -190,11 +191,7 @@ function generateSlug(title: string): string {
 
 function formatDate(dateStr: string): string {
   if (!dateStr) return "";
-  return new Date(dateStr).toLocaleDateString("es-VE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatEventDateShort(dateStr);
 }
 
 // Parsea formData.categories (JSON) a CategoryOption[]

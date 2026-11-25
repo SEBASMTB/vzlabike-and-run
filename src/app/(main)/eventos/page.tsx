@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
+import { formatEventDateLong } from "@/lib/date-utils";
 import {
   Calendar,
   MapPin,
@@ -79,12 +80,7 @@ const categoryGradients: Record<string, string> = {
 // Helpers
 // ============================================================
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-VE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  return formatEventDateLong(dateStr);
 }
 
 function getEventStatus(date: string): "upcoming" | "past" {

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { formatEventDate } from "@/lib/date-utils";
 import {
   Dialog,
   DialogContent,
@@ -35,18 +36,11 @@ interface EventDetailDialogProps {
 }
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-VE", {
+  return formatEventDate(dateStr, {
     weekday: "long",
     day: "numeric",
     month: "long",
     year: "numeric",
-  });
-}
-
-function formatTime(dateStr: string): string {
-  return new Date(dateStr).toLocaleTimeString("es-VE", {
-    hour: "2-digit",
-    minute: "2-digit",
   });
 }
 
@@ -109,14 +103,14 @@ export function EventDetailDialog({
               <Calendar className="size-5 mx-auto mb-1 text-red-500" />
               <p className="text-xs text-muted-foreground">Fecha</p>
               <p className="text-sm font-semibold text-foreground">
-                {new Date(event.date).toLocaleDateString("es-VE", { day: "numeric", month: "short" })}
+                {formatEventDate(event.date, { day: "numeric", month: "short" })}
               </p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center">
               <Clock className="size-5 mx-auto mb-1 text-red-500" />
               <p className="text-xs text-muted-foreground">Hora</p>
               <p className="text-sm font-semibold text-foreground">
-                {formatTime(event.date)}
+                Por confirmar
               </p>
             </div>
             <div className="bg-gray-50 rounded-lg p-3 text-center">

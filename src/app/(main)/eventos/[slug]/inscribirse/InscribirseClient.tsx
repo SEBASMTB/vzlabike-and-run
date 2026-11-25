@@ -42,9 +42,13 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
           const catRes = await fetch(`/api/events/${slug}/categories`);
           if (catRes.ok) {
             const catData = await catRes.json();
-            if (Array.isArray(catData)) {
-              setCategories(catData);
-            }
+            // Respuesta: { categories: [...], ageCalcMode, eventDate, source }
+            const list = Array.isArray(catData)
+              ? catData
+              : Array.isArray(catData?.categories)
+                ? catData.categories
+                : [];
+            setCategories(list);
           }
         } catch {
           // Categories are optional

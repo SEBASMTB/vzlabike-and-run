@@ -2,6 +2,7 @@
 
 import { useState, useMemo } from "react";
 import { FileText, ChevronDown, ChevronUp, AlertTriangle } from "lucide-react";
+import { formatEventDate } from "@/lib/date-utils";
 
 interface LiabilityWaiverProps {
   eventTitle: string;
@@ -13,7 +14,7 @@ interface LiabilityWaiverProps {
 
 function generateWaiverText(eventTitle: string, eventDate: string, organizer: string): string {
   const formattedDate = eventDate
-    ? new Date(eventDate).toLocaleDateString("es-VE", {
+    ? formatEventDate(eventDate, {
         day: "numeric",
         month: "long",
         year: "numeric",

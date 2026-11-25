@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { sendPreRegistrationEmail } from "@/lib/email";
-import { calculateAge, parseEventCategories, validateMTBCategory } from "@/lib/categories";
+import { calculateAge, parseEventCategories, validateMTBCategory, validateGenericCategory, getCategoriesForSport, type CategoryOption } from "@/lib/categories";
 import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 export async function POST(
@@ -21,9 +21,9 @@ export async function POST(
       );
     }
 
-    // Limit request body size (prevent huge payloads)
+    // Limit request body size (payment proof image can be ~1MB base64)
     const contentLength = request.headers.get("content-length");
-    if (contentLength && parseInt(contentLength) > 10_000) {
+    if (contentLength && parseInt(contentLength) > 1_500_000) {
       return NextResponse.json(
         { error: "La solicitud es demasiado grande" },
         { status: 413 }
@@ -102,22 +102,50 @@ export async function POST(
     }
 
     // MTB category validation (always validate for MTB events)
+    // - Categorías legacy JSON → reglas MTB (Élite, 100 Kilos, Recreativo)
+    // - Categorías en BD o estándar del deporte → validación genérica edad/género
     if (event.sportType === "mtb") {
       const age = calculateAge(dateOfBirth, event.date.toISOString(), event.ageCalcMode || "calendar_year");
-      const eventCats = parseEventCategories(event.categories, "mtb");
-      const validation = validateMTBCategory(
-        category,
-        age,
-        eventCats,
-        gender,
-        mtbProfile
-      );
+      const legacyCats: CategoryOption[] = parseEventCategories(event.categories, "mtb");
+
+      let validation: { valid: boolean; error?: string };
+      if (legacyCats.length > 0) {
+        validation = validateMTBCategory(category, age, legacyCats, gender, mtbProfile);
+      } else {
+        let servedCats: CategoryOption[];
+        try {
+          const dbCats = await db.category.findMany({ where: { eventId: event.id } });
+          servedCats = dbCats.length > 0
+            ? dbCats.map((c) => ({
+                value: c.name,
+                label: c.name,
+                minAge: c.minAge,
+                maxAge: c.maxAge,
+                gender: c.gender === "M" || c.gender === "F" ? c.gender : undefined,
+              }))
+            : getCategoriesForSport("mtb");
+        } catch {
+          servedCats = getCategoriesForSport("mtb");
+        }
+        validation = validateGenericCategory(category, age, servedCats, gender);
+      }
       if (!validation.valid) {
         return NextResponse.json(
           { error: validation.error || "Categoría no válida para tu edad o género" },
           { status: 400 }
         );
       }
+    }
+
+    // Resolver categoryId real en BD por nombre de categoría (si existe)
+    let categoryId: string | null = null;
+    try {
+      const match = await db.category.findFirst({
+        where: { eventId: event.id, name: category },
+      });
+      categoryId = match?.id ?? null;
+    } catch {
+      categoryId = null;
     }
 
     // Generate bib number
@@ -143,6 +171,7 @@ export async function POST(
         waiverAccepted: waiverAccepted || false,
         status: "pending",
         bibNumber,
+        categoryId,
       },
     });
 
@@ -160,9 +189,10 @@ export async function POST(
     }).catch(() => {});
 
     return NextResponse.json(registration, { status: 201 });
-  } catch {
+  } catch (err) {
+    console.error("[API register] Error:", err);
     return NextResponse.json(
-      { error: "Error al procesar inscripción" },
+      { error: "Error al procesar inscripción", detail: String(err).slice(0, 300) },
       { status: 500 }
     );
   }

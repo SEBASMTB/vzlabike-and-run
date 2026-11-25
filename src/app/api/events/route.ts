@@ -1,6 +1,7 @@
 import { getDb } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
+import { normalizeEventDate } from "@/lib/date-utils";
 import {
   getEventsCache,
   setEventsCache,
@@ -110,7 +111,8 @@ export async function POST(request: NextRequest) {
         title,
         slug,
         description: description || "",
-        date: new Date(date),
+        // date-only ("2027-02-14") → mediodía UTC (evita desfase de un día)
+        date: normalizeEventDate(date),
         location,
         distance,
         sportType: sportType || category || "running",

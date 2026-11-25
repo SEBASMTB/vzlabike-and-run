@@ -148,7 +148,14 @@ const statusLabels: Record<string, string> = {
 const PAGE_SIZE = 10;
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-VE", {
+  // Soporta DD/MM/YYYY (fecha de nacimiento legacy) e ISO (createdAt)
+  const dmy = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(dateStr || "");
+  if (dmy) {
+    return `${dmy[1].padStart(2, "0")}/${dmy[2].padStart(2, "0")}/${dmy[3]}`;
+  }
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr || "—";
+  return d.toLocaleDateString("es-VE", {
     day: "numeric",
     month: "short",
     year: "numeric",

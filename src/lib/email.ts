@@ -1,4 +1,5 @@
 import { Resend } from "resend";
+import { formatEventDate } from "@/lib/date-utils";
 
 const FROM_EMAIL = process.env.FROM_EMAIL || "venezuelabikeandrun@gmail.com";
 const FROM_NAME = process.env.FROM_NAME || "Venezuela Bike and Run";
@@ -17,7 +18,7 @@ interface EmailRegistrationData {
 }
 
 function generatePreRegistrationHTML(data: EmailRegistrationData): string {
-  const formattedDate = new Date(data.eventDate).toLocaleDateString("es-VE", {
+  const formattedDate = formatEventDate(data.eventDate, {
     weekday: "long",
     year: "numeric",
     month: "long",

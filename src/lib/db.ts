@@ -264,7 +264,7 @@ CREATE TABLE IF NOT EXISTS "Registration" (
     "gender" TEXT NOT NULL,
     "dateOfBirth" TEXT NOT NULL,
     "shirtSize" TEXT NOT NULL DEFAULT '',
-    "category" TEXT NOT NULL,
+    "category" TEXT NOT NULL DEFAULT '',
     "team" TEXT NOT NULL DEFAULT '',
     "emergencyContact" TEXT NOT NULL DEFAULT '',
     "emergencyPhone" TEXT NOT NULL DEFAULT '',
@@ -273,10 +273,37 @@ CREATE TABLE IF NOT EXISTS "Registration" (
     "status" TEXT NOT NULL DEFAULT 'pending',
     "waiverAccepted" BOOLEAN NOT NULL DEFAULT 0,
     "bibNumber" INTEGER,
+    "hasShirt" BOOLEAN NOT NULL DEFAULT 1,
     "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "mtbProfile" TEXT NOT NULL DEFAULT '',
     FOREIGN KEY ("eventId") REFERENCES "Event"("id") ON DELETE CASCADE ON UPDATE CASCADE
 );
+
+CREATE TABLE IF NOT EXISTS "Runner" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "cedula" TEXT NOT NULL,
+    "nombres" TEXT NOT NULL,
+    "apellidos" TEXT NOT NULL,
+    "fechaNacimiento" DATETIME NOT NULL,
+    "genero" TEXT NOT NULL,
+    "email" TEXT,
+    "telefono" TEXT,
+    "pais" TEXT NOT NULL DEFAULT 'Venezuela',
+    "estado" TEXT,
+    "ciudad" TEXT,
+    "direccion" TEXT,
+    "team" TEXT,
+    "tallaFranela" TEXT,
+    "licenciaFederativa" TEXT,
+    "grupoSanguineo" TEXT,
+    "contactoEmergenciaNombre" TEXT,
+    "contactoEmergenciaTelefono" TEXT,
+    "contactoEmergenciaParentesco" TEXT,
+    "alergiasCondiciones" TEXT,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "Runner_cedula_key" ON "Runner"("cedula");
 
 CREATE TABLE IF NOT EXISTS "Category" (
     "id" TEXT NOT NULL PRIMARY KEY,
@@ -384,7 +411,9 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     gender: 'TEXT NOT NULL',
     dateOfBirth: 'TEXT NOT NULL',
     shirtSize: "TEXT NOT NULL DEFAULT ''",
-    category: 'TEXT NOT NULL',
+    // Nombre de categoría en texto; con DEFAULT para que ALTER TABLE pueda
+    // añadirla a bases de datos antiguas (SQLite exige DEFAULT en NOT NULL)
+    category: "TEXT NOT NULL DEFAULT ''",
     team: "TEXT NOT NULL DEFAULT ''",
     emergencyContact: "TEXT NOT NULL DEFAULT ''",
     emergencyPhone: "TEXT NOT NULL DEFAULT ''",
@@ -393,6 +422,7 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     status: "TEXT NOT NULL DEFAULT 'pending'",
     waiverAccepted: 'BOOLEAN NOT NULL DEFAULT 0',
     bibNumber: 'INTEGER',
+    hasShirt: 'BOOLEAN NOT NULL DEFAULT 1',
     createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
     mtbProfile: "TEXT NOT NULL DEFAULT ''",
     // Nuevos campos del módulo de inscripciones
@@ -414,6 +444,30 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     totalAmount: 'REAL NOT NULL DEFAULT 0',
     paymentProofUrl: 'TEXT',
     updatedAt: 'DATETIME',
+  },
+  Runner: {
+    id: 'TEXT NOT NULL PRIMARY KEY',
+    cedula: 'TEXT NOT NULL',
+    nombres: 'TEXT NOT NULL',
+    apellidos: 'TEXT NOT NULL',
+    fechaNacimiento: 'DATETIME NOT NULL',
+    genero: 'TEXT NOT NULL',
+    email: 'TEXT',
+    telefono: 'TEXT',
+    pais: "TEXT NOT NULL DEFAULT 'Venezuela'",
+    estado: 'TEXT',
+    ciudad: 'TEXT',
+    direccion: 'TEXT',
+    team: 'TEXT',
+    tallaFranela: 'TEXT',
+    licenciaFederativa: 'TEXT',
+    grupoSanguineo: 'TEXT',
+    contactoEmergenciaNombre: 'TEXT',
+    contactoEmergenciaTelefono: 'TEXT',
+    contactoEmergenciaParentesco: 'TEXT',
+    alergiasCondiciones: 'TEXT',
+    createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+    updatedAt: 'DATETIME NOT NULL',
   },
   Product: {
     id: 'TEXT NOT NULL PRIMARY KEY',

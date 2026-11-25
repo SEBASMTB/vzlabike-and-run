@@ -6,6 +6,7 @@ import { MapPin, Calendar, Ruler, Users, ArrowRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { CountdownTimer } from "./CountdownTimer";
+import { formatEventDate } from "@/lib/date-utils";
 
 export interface EventCardProps {
   id: string;
@@ -44,7 +45,7 @@ const categoryGradients: Record<string, string> = {
 };
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-VE", {
+  return formatEventDate(dateStr, {
     day: "numeric",
     month: "long",
     year: "numeric",

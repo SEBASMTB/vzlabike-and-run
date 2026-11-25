@@ -1,7 +1,7 @@
 import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { sendPreRegistrationEmail } from "@/lib/email";
-import { calculateAge, parseEventCategories, validateMTBCategory } from "@/lib/categories";
+import { calculateAge, parseEventCategories, validateMTBCategory, validateGenericCategory, getCategoriesForSport, type CategoryOption } from "@/lib/categories";
 import { rateLimit, RATE_LIMITS } from "@/lib/rate-limit";
 
 interface GroupParticipant {
@@ -139,18 +139,41 @@ export async function POST(
     }
 
     // MTB category/profile validation for each participant
+    // - Legacy JSON → reglas MTB (Élite, 100 Kilos, Recreativo)
+    // - BD o estándar del deporte → validación genérica edad/género
     if (event.sportType === "mtb") {
-      const eventCats = parseEventCategories(event.categories, "mtb");
+      const legacyCats: CategoryOption[] = parseEventCategories(event.categories, "mtb");
+
+      let servedCats: CategoryOption[] = legacyCats;
+      if (legacyCats.length === 0) {
+        try {
+          const dbCats = await db.category.findMany({ where: { eventId: event.id } });
+          servedCats = dbCats.length > 0
+            ? dbCats.map((c) => ({
+                value: c.name,
+                label: c.name,
+                minAge: c.minAge,
+                maxAge: c.maxAge,
+                gender: c.gender === "M" || c.gender === "F" ? c.gender : undefined,
+              }))
+            : getCategoriesForSport("mtb");
+        } catch {
+          servedCats = getCategoriesForSport("mtb");
+        }
+      }
+
       for (const p of participants) {
         if (p.mtbProfile) {
           const age = calculateAge(p.dateOfBirth, event.date.toISOString(), event.ageCalcMode || "calendar_year");
-          const validation = validateMTBCategory(
-            p.category,
-            age,
-            eventCats,
-            p.gender,
-            p.mtbProfile as "competitivo" | "recreativo"
-          );
+          const validation = legacyCats.length > 0
+            ? validateMTBCategory(
+                p.category,
+                age,
+                servedCats,
+                p.gender,
+                p.mtbProfile as "competitivo" | "recreativo"
+              )
+            : validateGenericCategory(p.category, age, servedCats, p.gender);
           if (!validation.valid) {
             return NextResponse.json(
               { error: `${p.firstName} ${p.lastName}: ${validation.error || "Categoría no válida para el perfil seleccionado"}` },

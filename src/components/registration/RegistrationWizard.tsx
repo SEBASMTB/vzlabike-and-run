@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import {
   type MetodoPago,
 } from "@/lib/venezuela-data";
 import { useToast } from "@/hooks/use-toast";
+import { formatEventDateLong } from "@/lib/date-utils";
 import { OrderSummary } from "./OrderSummary";
 import {
   User,
@@ -392,6 +393,28 @@ export function RegistrationWizard({
     });
   }, [categories, calculatedAge, formData.genero]);
 
+  // Auto-asignar la categoría sugerida en cuanto se conocen edad y género:
+  // el atleta marca su fecha de nacimiento y el sistema selecciona sola la
+  // categoría que corresponde (siempre puede cambiarla manualmente).
+  const autoAssignedRef = useRef(false);
+  useEffect(() => {
+    if (!calculatedAge || !formData.genero) return;
+    if (formData.categoryId || autoAssignedRef.current) return;
+    if (eligibleCategories.length === 0) return;
+    // Preferir género exacto y el rango de edad más estrecho
+    const exactGender = eligibleCategories.filter(
+      (c) => c.gender === formData.genero
+    );
+    const pool = exactGender.length > 0 ? exactGender : eligibleCategories;
+    const best = [...pool].sort(
+      (a, b) => a.maxAge - a.minAge - (b.maxAge - b.minAge)
+    )[0];
+    if (best) {
+      autoAssignedRef.current = true;
+      update("categoryId", best.id);
+    }
+  }, [calculatedAge, formData.genero, formData.categoryId, eligibleCategories, update]);
+
   const participantName = useMemo(() => {
     const n = formData.nombres.trim();
     const a = formData.apellidos.trim();
@@ -729,13 +752,7 @@ export function RegistrationWizard({
             <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/90 sm:text-sm">
               <span className="flex items-center gap-1.5">
                 <Calendar className="size-4" />
-                {event.date
-                  ? new Date(event.date).toLocaleDateString("es-VE", {
-                      day: "numeric",
-                      month: "long",
-                      year: "numeric",
-                    })
-                  : "Por confirmar"}
+                {event.date ? formatEventDateLong(event.date) : "Por confirmar"}
               </span>
               <span className="flex items-center gap-1.5">
                 <MapPin className="size-4" />
@@ -1513,7 +1530,7 @@ function renderStep3({
             </h3>
             <p className="text-xs text-gray-500">
               {calculatedAge !== null
-                ? `Tu edad: ${calculatedAge} años — categorías sugeridas resaltadas.`
+                ? `Tu edad: ${calculatedAge} años — te asignamos una categoría automáticamente, puedes cambiarla si lo deseas.`
                 : "Selecciona la categoría que corresponda."}
             </p>
           </div>
@@ -1567,14 +1584,18 @@ function renderStep3({
                       </span>
                       {isEligible && (
                         <Badge className="bg-green-100 text-[10px] text-green-700 hover:bg-green-100">
-                          Sugerida
+                          {isSelected ? "Asignada" : "Sugerida"}
                         </Badge>
                       )}
                     </div>
                     <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-gray-500">
                       <span className="flex items-center gap-1">
                         <User className="size-3" />
-                        {c.gender || "Mixto"}
+                        {c.gender === "M"
+                          ? "Varones"
+                          : c.gender === "F"
+                            ? "Damas"
+                            : "Mixto"}
                       </span>
                       <span className="flex items-center gap-1">
                         <Calendar className="size-3" />

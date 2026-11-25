@@ -2,6 +2,7 @@
 
 import { useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
+import { formatEventDate } from "@/lib/date-utils";
 import {
   Calendar,
   MapPin,
@@ -94,7 +95,7 @@ export function OrderSummary({
   const formattedDate = useMemo(() => {
     if (!eventDate) return "—";
     try {
-      return new Date(eventDate).toLocaleDateString("es-VE", {
+      return formatEventDate(eventDate, {
         weekday: "short",
         day: "numeric",
         month: "long",

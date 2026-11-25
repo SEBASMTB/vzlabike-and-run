@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
+import { formatEventDateLong } from "@/lib/date-utils";
 import {
   Calendar,
   MapPin,
@@ -285,12 +286,7 @@ const detailIcons: Record<string, { icon: React.ReactNode; color: string }> = {
 };
 
 function formatDateFull(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-VE", {
-    weekday: "long",
-    day: "numeric",
-    month: "long",
-    year: "numeric",
-  });
+  return formatEventDateLong(dateStr);
 }
 
 // ============================================================

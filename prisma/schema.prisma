@@ -139,12 +139,14 @@ model Registration {
   createdAt DateTime @default(now())
 
   // --- Relaciones principales ---
-  eventId    String
-  event      Event    @relation(fields: [eventId], references: [id])
-  runnerId   String
-  runner     Runner   @relation(fields: [runnerId], references: [id])
-  categoryId String
-  category   Category @relation(fields: [categoryId], references: [id])
+  // runnerId/categoryId son OPCIONALES: el flujo legacy de inscripción
+  // registra con `category` (nombre en texto) sin Runner ni Category.
+  eventId     String
+  event       Event    @relation(fields: [eventId], references: [id])
+  runnerId    String?
+  runner      Runner?  @relation(fields: [runnerId], references: [id])
+  categoryId  String?
+  categoryRef Category? @relation(fields: [categoryId], references: [id])
 
   // --- Datos de Carrera ---
   bibNumber                Int?
@@ -183,6 +185,9 @@ model Registration {
   waiverAccepted Boolean @default(false) // Aceptación de responsabilidad
 
   // --- Legacy fields (compatibilidad con formularios existentes) ---
+  // `category` = nombre de la categoría en texto (columna NOT NULL en BD,
+  // usada por todo el flujo legacy de inscripción y listados).
+  category         String  @default("")
   firstName        String  @default("")
   lastName         String  @default("")
   email            String  @default("")

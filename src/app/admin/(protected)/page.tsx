@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { formatEventDateShort } from "@/lib/date-utils";
 import {
   CalendarDays,
   Users,
@@ -83,11 +84,7 @@ const eventStatusLabels: Record<string, string> = {
 };
 
 function formatDate(dateStr: string): string {
-  return new Date(dateStr).toLocaleDateString("es-VE", {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return formatEventDateShort(dateStr);
 }
 
 function formatCurrency(amount: number): string {

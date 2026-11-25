@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth";
 import { invalidateEventsCache } from "@/lib/events-cache";
+import { normalizeEventDate } from "@/lib/date-utils";
 
 export async function GET(
   request: NextRequest,
@@ -107,10 +108,10 @@ export async function PUT(
       }
     }
 
-    // Handle date separately
+    // Handle date separately (date-only → mediodía UTC, evita desfase de un día)
     if (body.date) {
       fields.push(`"date" = ?`);
-      values.push(new Date(body.date).toISOString());
+      values.push(normalizeEventDate(body.date).toISOString());
     }
 
     // Handle shirtPrice (ensure not null)

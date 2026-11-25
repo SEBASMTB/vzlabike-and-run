@@ -110,6 +110,43 @@ export function getMTBCategoryOptions(
 }
 
 /**
+ * Validación genérica (no MTB-preset): la categoría debe existir en la lista
+ * servida al wizard (BD o estándar del deporte) y corresponder a edad y género.
+ */
+export function validateGenericCategory(
+  categoryValue: string,
+  age: number,
+  categories: CategoryOption[],
+  gender?: string
+): { valid: boolean; error?: string } {
+  const selectedCat = categories.find((c) => {
+    const catCode = categoryValue.includes(" - ")
+      ? categoryValue.split(" - ")[0].trim()
+      : categoryValue.trim();
+    return (
+      c.value === catCode ||
+      c.value === categoryValue ||
+      c.label === categoryValue
+    );
+  });
+
+  if (!selectedCat) {
+    return { valid: false, error: "La categoría seleccionada no es válida para este evento." };
+  }
+
+  const ng = normalizeGender(gender);
+  if (selectedCat.gender && ng && selectedCat.gender.toUpperCase() !== ng) {
+    return { valid: false, error: "Esta categoría no corresponde a tu género." };
+  }
+
+  if (age < selectedCat.minAge || age > selectedCat.maxAge) {
+    return { valid: false, error: "La categoría seleccionada no corresponde a tu edad." };
+  }
+
+  return { valid: true };
+}
+
+/**
  * Validates that a selected MTB category is in the eligible list.
  * Now validates against the full eligible list from getMTBCategoryOptions.
  */
@@ -123,10 +160,11 @@ export function validateMTBCategory(
   // Parse categoryValue: format is "MTB-ELI-M - Élite Masculino (Libre)"
   const catCode = categoryValue.includes(" - ") ? categoryValue.split(" - ")[0].trim() : categoryValue.trim();
 
-  // Find the category in the list
+  // Find the category in the list (por código, por valor o por nombre/etiqueta —
+  // el wizard envía el nombre visible de la categoría)
   const selectedCat = categories.find((c) => {
     const fullValue = `${c.value} - ${c.label}`;
-    return c.value === catCode || c.value === categoryValue || fullValue === categoryValue;
+    return c.value === catCode || c.value === categoryValue || fullValue === categoryValue || c.label === categoryValue;
   });
 
   if (!selectedCat) {
