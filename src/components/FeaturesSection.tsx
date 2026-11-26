@@ -36,7 +36,7 @@ const features: Feature[] = [
     title: "Experiencia Organizativa",
     description:
       "Más de 10 años organizando eventos deportivos de primer nivel en Venezuela. Cada carrera es una experiencia perfecta.",
-    spec: "TRACK RECORD · 10+ AÑOS · 200+ EVENTOS",
+    spec: "TRACK RECORD · 10+ AÑOS · 500+ EVENTOS",
   },
   {
     icon: PenTool,

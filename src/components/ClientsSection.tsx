@@ -6,29 +6,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { ChevronLeft, ChevronRight, Quote } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { SectionHeading } from "./SectionHeading";
-
-const partners = [
-  {
-    name: "World Triathlon",
-    logo: "/logo-world-athletics.png",
-  },
-  {
-    name: "UCI",
-    logo: "/logo-uci.png",
-  },
-  {
-    name: "World Athletics",
-    logo: "/logo-world-athletics-2.png",
-  },
-  {
-    name: "FEVE Tri",
-    logo: "/logo-fevetri.png",
-  },
-  {
-    name: "FVA",
-    logo: "/logo-fva.png",
-  },
-];
+import { partners } from "@/config/partners";
 
 const testimonials = [
   {
@@ -97,24 +75,11 @@ export function ClientsSection() {
                 title={partner.name}
               >
                 <div className="relative flex items-center justify-center p-4 md:p-6 rounded-2xl transition-all duration-300 hover:bg-gray-50 hover:shadow-sm">
-                  {/* FVA and FEVE Tri logos — larger */}
                   <Image
                     src={partner.logo}
                     alt={partner.name}
-                    width={
-                      partner.name === "FVA" || partner.name === "FEVE Tri"
-                        ? 120
-                        : partner.name === "UCI"
-                        ? 80
-                        : 140
-                    }
-                    height={
-                      partner.name === "FVA" || partner.name === "FEVE Tri"
-                        ? 120
-                        : partner.name === "UCI"
-                        ? 80
-                        : 60
-                    }
+                    width={partner.width ?? 140}
+                    height={partner.height ?? 60}
                     className="object-contain transition-all duration-300 group-hover:scale-105 opacity-70 group-hover:opacity-100"
                     priority={index < 3}
                   />

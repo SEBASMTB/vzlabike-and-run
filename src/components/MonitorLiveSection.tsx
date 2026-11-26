@@ -30,8 +30,8 @@ const highlights = [
   },
   {
     icon: Smartphone,
-    title: "Sin apps ni esperas",
-    desc: "Nada de descargar aplicaciones: la información está frente a ti, en vivo.",
+    title: "Código QR en la meta",
+    desc: "Escanea el QR con tu teléfono y consulta tus parciales al instante, sin descargar nada.",
   },
 ];
 
@@ -63,12 +63,17 @@ export function MonitorLiveSection() {
               lugar del evento
             </h2>
 
-            <p className="text-lg text-muted-foreground leading-relaxed mb-8">
-              Los corredores ya no tienen que esperar ni entrar a una
-              aplicación para ver sus resultados: el{" "}
-              <strong className="text-foreground">Monitor Live</strong> los
-              muestra en la pantalla del evento, al instante y con la máxima
-              precisión. Cruza la meta y tu tiempo ya está en la pantalla.
+            <p className="text-lg text-muted-foreground leading-relaxed mb-4">
+              Tus resultados en vivo y en el mismo lugar del evento, tanto por
+              <strong className="text-foreground"> código QR desde tu teléfono</strong> como en
+              <strong className="text-foreground"> pantalla LED gigante</strong>. Consulta tus
+              parciales y descarga tu certificado digital inmediato al cruzar la meta.
+            </p>
+            <p className="text-base text-muted-foreground leading-relaxed mb-8">
+              El <strong className="text-foreground">Monitor Live</strong> potencia la experiencia
+              dentro del sitio del evento y trabaja de la mano con nuestra plataforma web de
+              resultados <strong className="text-foreground">VBRWorks®</strong>: en el sitio y
+              desde cualquier lugar, siempre en tiempo real.
             </p>
 
             <div className="grid sm:grid-cols-2 gap-4 mb-9">

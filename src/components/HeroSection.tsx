@@ -6,6 +6,11 @@ import { Button } from "@/components/ui/button";
 import { ArrowDown, ChevronRight, ExternalLink, Trophy, Clock, BarChart3 } from "lucide-react";
 import { CountdownTimer } from "./CountdownTimer";
 
+interface NextEvent {
+  title: string;
+  date: string;
+}
+
 interface CounterProps {
   target: number;
   label: string;
@@ -66,6 +71,27 @@ export function HeroSection() {
     const el = document.querySelector(href);
     if (el) el.scrollIntoView({ behavior: "smooth" });
   };
+
+  // Próximo evento destacado: dinámico desde la base de datos
+  // (prioriza los marcados como featured; oculta el bloque si no hay eventos)
+  const [nextEvent, setNextEvent] = useState<NextEvent | null>(null);
+
+  useEffect(() => {
+    fetch("/api/events")
+      .then((res) => (res.ok ? res.json() : []))
+      .then((events) => {
+        const now = Date.now();
+        const upcoming = (Array.isArray(events) ? events : [])
+          .filter((e) => e?.date && new Date(e.date).getTime() >= now)
+          .sort(
+            (a, b) =>
+              new Date(a.date).getTime() - new Date(b.date).getTime()
+          );
+        const pick = upcoming.find((e) => e.featured) || upcoming[0];
+        if (pick) setNextEvent({ title: pick.title, date: pick.date });
+      })
+      .catch(() => {});
+  }, []);
 
   return (
     <section
@@ -160,19 +186,19 @@ export function HeroSection() {
           </div>
         </motion.div>
 
-        {/* Countdown to next featured event */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.8, delay: 0.4 }}
-          className="mt-12 max-w-sm"
-        >
-          <p className="text-sm text-white/60 mb-2">Próximo evento destacado:</p>
-          <p className="text-white font-semibold mb-2">WOMENS RUN - 5K</p>
-          <CountdownTimer
-            targetDate={new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()}
-          />
-        </motion.div>
+        {/* Countdown to next event (dynamic from DB) */}
+        {nextEvent && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.8, delay: 0.4 }}
+            className="mt-12 max-w-sm"
+          >
+            <p className="text-sm text-white/60 mb-2">Próximo evento destacado:</p>
+            <p className="text-white font-semibold mb-2">{nextEvent.title}</p>
+            <CountdownTimer targetDate={nextEvent.date} />
+          </motion.div>
+        )}
       </div>
 
       {/* Statistics Bar */}
