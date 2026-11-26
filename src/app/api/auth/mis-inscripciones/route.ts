@@ -10,7 +10,7 @@
  * datos de otros corredores.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, getDb } from "@/lib/db";
 import { getSessionUser } from "@/lib/user-auth";
 
 export async function GET(request: NextRequest) {

@@ -7,7 +7,7 @@
  * su ficha e historial automáticamente.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, getDb } from "@/lib/db";
 import {
   createUserToken,
   normalizeCedula,
@@ -25,6 +25,9 @@ export async function POST(request: NextRequest) {
         { status: 429, headers: { "Retry-After": String(limit.retryAfter) } }
       );
     }
+
+    // Asegura init/DDL de BD también en desarrollo
+    await getDb();
 
     const body = await request.json().catch(() => null);
     if (!body) {

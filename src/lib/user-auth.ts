@@ -144,9 +144,11 @@ export async function getSessionUser(
   const payload = verifyUserToken(token);
   if (!payload) return null;
 
-  // Import diferido para evitar ciclos de importación (db.ts es pesado)
-  const { db } = await import("@/lib/db");
-  const user = await db.user.findUnique({
+  // getDb() asegura el init/DDL de la BD también en desarrollo
+  // (en producción el proxy de db.ts ya lo garantiza)
+  const { getDb } = await import("@/lib/db");
+  const prisma = await getDb();
+  const user = await prisma.user.findUnique({
     where: { id: payload.sub },
     select: {
       id: true,
@@ -168,8 +170,9 @@ export async function getSessionUserFromServer(): Promise<SessionUser | null> {
     const payload = verifyUserToken(token);
     if (!payload) return null;
 
-    const { db } = await import("@/lib/db");
-    const user = await db.user.findUnique({
+    const { getDb } = await import("@/lib/db");
+    const prisma = await getDb();
+    const user = await prisma.user.findUnique({
       where: { id: payload.sub },
       select: {
         id: true,

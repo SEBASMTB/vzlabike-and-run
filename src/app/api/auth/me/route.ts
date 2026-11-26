@@ -7,7 +7,7 @@
  * Si no hay sesión responde 401. Nunca expone datos de otros corredores.
  */
 import { NextRequest, NextResponse } from "next/server";
-import { db } from "@/lib/db";
+import { db, getDb } from "@/lib/db";
 import { getSessionUser, normalizeCedula } from "@/lib/user-auth";
 
 // Campos seleccionables de la ficha Runner (son los del propio usuario,
