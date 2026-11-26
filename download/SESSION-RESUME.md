@@ -14,7 +14,7 @@ Estoy trabajando en el proyecto VzlaBike and Run, una plataforma de cronometraje
 - Deploy Vercel: https://vzlabike-and-run.vercel.app
 - Admin: https://vzlabike-and-run.vercel.app/admin/login (pass: vzlabike2024)
 - Base de datos: Turso (libsql://vzlabikeandrun-vbrresult.aws-us-west-2.turso.io)
-- Última sesión cerrada: 2026-11-25, HEAD = 8ad440b
+- Última sesión cerrada: 2026-11-26, HEAD = f6dad5d
 - Guía de staging: download/STAGING-SETUP.md (subdominio + Turso separada, aún sin crear)
 
 == ARCHIVO DE ESTADO COMPLETO ==
@@ -104,7 +104,39 @@ El usuario dio luz verde al rediseño completo y se implementó TODO en 8 commit
   inscritos 200. NOTA: un check de conciliación falló por lag de réplica Turso (lectura
   desactualizada un instante); el matching funciona — informativo, no requiere acción.
 
-== LO ÚLTIMO QUE SE HIZO (2026-11-25, CORREO DE RECHAZO `f9bb411` + `8ad440b`) ==
+== LO ÚLTIMO QUE SE HIZO (2026-11-26, FICHA TÉCNICA `f6dad5d`) ==
+
+Instrucción del usuario: en la sección "¿Por qué elegirnos?" de la home, quitar las
+fotografías (además eran temática asiática que no encaja) porque se veían demasiado
+parecidas a las tarjetas de Próximos Eventos y confundían; reemplazarlas por iconografía
+técnica limpia (Lucide/SVG: engranajes, microchips, ondas RF, cronómetros, monitores live)
+en contenedores con la paleta de marca alto contraste negro/rojo, y darle a la sección un
+diseño tipo ficha de ingeniería para diferenciarla de la cartelera de eventos.
+Implementado en 1 commit (`f6dad5d`) y VERIFICADO EN PRODUCCIÓN:
+
+1. `src/components/FeaturesSection.tsx` REESCRITO: fondo `#0B0B0F` + retícula blueprint
+   (linear-gradient 48px, opacity 5%) + resplandor rojo superior blur 120px. Cabecera
+   técnica: punto rojo pulsante + `// Ficha técnica — Sistema de cronometraje` en mono
+   uppercase tracking-widest. SectionHeading con `light` (título blanco, sub gris).
+2. 6 TARJETAS tipo ficha: `bg-zinc-950/90 border-zinc-800 rounded-lg` (angulares, NO
+   rounded-2xl como EventCard), esquinas en L rojas tipo plano (30% → 100% al hover),
+   índice mono 01–06, icono en contenedor chip rojo (gradiente red-600→red-900, ring
+   red-500/40, glow rgba(220,38,38,.35)→.55 al hover, 2 puntos rojos decorativos) con
+   iconos: Waypoints (Experiencia), PenTool (Creatividad), Cpu (Tecnología), Timer
+   (Milímetro), Settings (Adaptabilidad), Shield (Compromiso). Pies de spec mono 11px
+   uppercase con ▸ rojo: TRACK RECORD · 10+ AÑOS · 200+ EVENTOS / OUTPUT · EXPERIENCIAS
+   A MEDIDA / CHIP RFID · RF 13.56 MHz · LIVE (+ mini-iconos Radio y Activity) /
+   TOLERANCIA · ±0.1 s · FOTO-FINISH / MODOS · RUNNING / MTB / TRIATLÓN / VIRTUAL /
+   SLA · SOPORTE DE SALIDA A META. Textos de título/descripción SIN cambios.
+3. ELIMINADAS las 6 fotos `public/features/*.webp` (solo las referenciaba este
+   componente — verificado con rg). Animación framer-motion stagger conservada.
+4. VERIFICACIÓN: build OK; screenshots local desktop 1440px + móvil 390px y producción
+   1440px (`scripts/shots/features-nueva.png`, `features-movil.png`,
+   `prod-features-nueva.png`, `eventos-comparacion.png`) — contraste total vs Próximos
+   Eventos (claro, foto, rounded-2xl, contadores y precios). Producción HTML sin
+   referencias a features/*.webp y con la cabecera "Ficha técnica".
+
+== SECCIÓN ANTERIOR (2026-11-25, CORREO DE RECHAZO `f9bb411` + `8ad440b`) ==
 
 Instrucciones del usuario: (1) NO aplicar lotes a los otros 7 eventos (son de prueba, los
 borrará al armar el calendario real); (2) SÍ implementar el correo automático al RECHAZAR

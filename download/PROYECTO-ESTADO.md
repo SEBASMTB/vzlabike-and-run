@@ -1,7 +1,7 @@
 # 📋 PROYECTO-ESTADO.md — VzlaBike and Run
 
 > **Archivo de estado técnico del proyecto.**  
-> Última actualización: 2026-11-25 (commit `8ad440b` — correo de rechazo)  
+> Última actualización: 2026-11-26 (commit `f6dad5d` — sección ¿Por Qué Elegirnos? como ficha técnica negro/rojo)  
 > Mantener siempre actualizado tras cada cambio funcional.
 
 ---
@@ -83,7 +83,7 @@
 ### 🏠 Páginas públicas
 - [x] `/` — Landing page (Hero, Features, Events, Services, Contact)
   - [x] Tipografía **Figtree** global (estilo Active Network) — commit `faf9474`
-  - [x] Sección **¿Por Qué Elegirnos?** con **fotografías deportivas reales** — commit `11eeb78`
+  - [x] Sección **¿Por Qué Elegirnos?** como **ficha técnica de cronometraje** negro/rojo — commit `f6dad5d` (antes fotografías `11eeb78`, retiradas): fondo `#0B0B0F` con retícula blueprint + resplandor rojo, cabecera mono `// Ficha técnica — Sistema de cronometraje` con punto pulsante, 6 tarjetas oscuras angulares (`rounded-lg`, NO redondeadas como EventCard) con esquinas tipo plano, iconos técnicos Lucide en contenedores chip rojo con glow (Waypoints/PenTool/**Cpu**/Timer/**Settings**/Shield), índices 01–06 y pies de spec en monospace (TRACK RECORD · CHIP RFID RF 13.56 MHz · LIVE con mini-iconos Radio+Activity · TOLERANCIA ±0.1 s FOTO-FINISH · MODOS · SLA). **Diferenciación visual deliberada** vs Próximos Eventos (claro, foto, `rounded-2xl`, contadores): la sección es oscura, técnica y sin fotos. Eliminados los 6 webp de `public/features/`. Verificado en producción (desktop 1440 + móvil 390, screenshots `scripts/shots/`)
 - [x] `/eventos` — Listado público con filtros y buscador + hero multi-disciplina (`0bfe73a`)
 - [x] `/eventos/[slug]` — Detalle de evento
   - [x] **Cupos disponibles en vivo** — `registrationCount` real con barra (`0b1b979`)
@@ -280,6 +280,8 @@
 ## 🔄 HISTORIAL DE COMMITS (git log)
 
 ```
+f6dad5d feat(diseno): 'Por que elegirnos' como ficha tecnica de cronometraje (negro/rojo) - sin fotos, iconos Lucide en chips, distinta a Proximos Eventos
+3026a0d docs: estado y session-resume actualizados a 8ad440b (correo de rechazo verificado en produccion, e2e-rechazo-prod.sh, decision: otros 7 eventos no se tocan)
 8ad440b fix(email): reportar el error real de Resend (SDK v6 devuelve error, no lanza) - emailSent ahora es fiable en los 3 correos
 f9bb411 feat(rechazo): correo automatico al rechazar (motivo obligatorio + pasos para corregir o reportar pago de nuevo)
 3cbb3b0 docs: estado y session-resume actualizados a b0aeace (notificaciones al aprobar: correo + whatsapp + PII verificado)
