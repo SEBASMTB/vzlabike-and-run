@@ -11,15 +11,48 @@ interface InscribirseClientProps {
   slug: string;
 }
 
+/** Ficha del Runner vinculado a la sesión (respuesta de /api/auth/me) */
+interface RunnerProfile {
+  cedula: string;
+  nombres: string;
+  apellidos: string;
+  fechaNacimiento: string;
+  genero: string;
+  email: string | null;
+  telefono: string | null;
+  estado: string | null;
+  ciudad: string | null;
+  team: string | null;
+  tallaFranela: string | null;
+  grupoSanguineo?: string | null;
+  alergiasCondiciones?: string | null;
+  contactoEmergenciaNombre: string | null;
+  contactoEmergenciaTelefono: string | null;
+  contactoEmergenciaParentesco: string | null;
+}
+
 export function InscribirseClient({ slug }: InscribirseClientProps) {
   const [event, setEvent] = useState<any>(null);
   const [categories, setCategories] = useState<any[]>([]);
+  const [sessionRunner, setSessionRunner] = useState<RunnerProfile | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
   useEffect(() => {
     async function fetchData() {
       try {
+        // Ficha del atleta con sesión iniciada (para auto-completar todo el
+        // formulario). Si no hay sesión, la página ya redirigió al login.
+        try {
+          const meRes = await fetch("/api/auth/me");
+          if (meRes.ok) {
+            const me = await meRes.json();
+            if (me?.runner) setSessionRunner(me.runner);
+          }
+        } catch {
+          // Sin prellenado si falla: el flujo manual sigue funcionando
+        }
+
         // Fetch event
         const eventRes = await fetch(`/api/events/${slug}`);
         if (!eventRes.ok) {
@@ -138,7 +171,11 @@ export function InscribirseClient({ slug }: InscribirseClientProps) {
       </div>
       <main className="flex-1 pt-20">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-          <RegistrationWizard event={eventData} categories={catList} />
+          <RegistrationWizard
+            event={eventData}
+            categories={catList}
+            sessionRunner={sessionRunner}
+          />
         </div>
       </main>
       <div className="print:hidden">

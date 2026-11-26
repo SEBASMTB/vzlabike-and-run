@@ -148,6 +148,13 @@ interface RegFormData {
 interface RegistrationWizardProps {
   event: RegEvent;
   categories: RegCategory[];
+  /**
+   * Perfil del atleta con sesión iniciada (de /api/auth/me). Si viene,
+   * el formulario nace auto-completado con la ficha vinculada por cédula:
+   * el corredor entra al wizard con sus datos ya cargados, sin rellenar
+   * nada. Puede vaciar el formulario con "Inscribir a un tercero".
+   */
+  sessionRunner?: RunnerProfile | null;
 }
 
 // ============================================================
@@ -335,6 +342,7 @@ function runnerLookupToForm(runner: RunnerProfile): Partial<RegFormData> {
 export function RegistrationWizard({
   event,
   categories,
+  sessionRunner,
 }: RegistrationWizardProps) {
   const [currentStep, setCurrentStep] = useState<number>(1);
   const [submitting, setSubmitting] = useState<boolean>(false);
@@ -356,6 +364,24 @@ export function RegistrationWizard({
   });
 
   const { toast } = useToast();
+
+  // ─── Prellenado con la sesión (Mi Perfil → Runner vinculado) ───
+  // Si el usuario llegó con sesión y su cuenta tiene Runner vinculado por
+  // cédula, el formulario abre con su ficha completa y el aviso verde de
+  // "datos cargados" — la misma experiencia del lookup, pero instantánea.
+  useEffect(() => {
+    if (!sessionRunner || !sessionRunner.cedula) return;
+    setFormData((d) => ({
+      ...d,
+      ...runnerLookupToForm(sessionRunner),
+    }));
+    setLookupInfo({
+      nombre: `${sessionRunner.nombres} ${sessionRunner.apellidos}`.trim(),
+    });
+    lastLookupCedula.current = sessionRunner.cedula.toUpperCase();
+    // Intencional: solo al montar el wizard
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cuentas de destino de pago configuradas por el organizador (Paso 3)
   const paymentAccounts = useMemo<PaymentAccount[]>(
