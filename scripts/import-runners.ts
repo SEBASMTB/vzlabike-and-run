@@ -283,9 +283,15 @@ async function importRunners(): Promise<void> {
   const csvContent = fs.readFileSync(CSV_FILE, "utf-8");
   const cleanContent = csvContent.replace(/^\uFEFF/, ""); // BOM UTF-8
 
+  // Detección de delimitador: Excel en español suele exportar con ";"
+  const headerLine = cleanContent.split(/\r?\n/, 1)[0] || "";
+  const delimiter = (headerLine.match(/;/g)?.length || 0) > (headerLine.match(/,/g)?.length || 0)
+    ? ";"
+    : ",";
+
   const records: RawRow[] = parse(cleanContent, {
     columns: true,
-    delimiter: ",",
+    delimiter,
     skip_empty_lines: true,
     relax_quotes: true,
     relax_column_count: true,

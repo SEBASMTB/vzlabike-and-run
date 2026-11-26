@@ -14,7 +14,15 @@ import { Loader2, LogIn, Mail, Lock, AlertCircle, ShieldCheck } from "lucide-rea
 function IniciarSesionForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/mi-perfil";
+
+  /** Anti open-redirect: solo rutas internas (empiezan con "/" y no "//") */
+  const safeRedirect = (raw: string | null): string => {
+    if (raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("://")) {
+      return raw;
+    }
+    return "/mi-perfil";
+  };
+  const redirect = safeRedirect(searchParams.get("redirect"));
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -82,16 +90,16 @@ function IniciarSesionForm() {
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-1.5">
               <Label htmlFor="email" className="text-white/80 text-sm">
-                Correo electrónico
+                Correo o cédula
               </Label>
               <div className="relative">
                 <Mail className="absolute left-3 top-1/2 -translate-y-1/2 size-4 text-white/40" />
                 <Input
                   id="email"
-                  type="email"
+                  type="text"
                   required
-                  autoComplete="email"
-                  placeholder="tucorreo@ejemplo.com"
+                  autoComplete="username"
+                  placeholder="tucorreo@ejemplo.com o V-12345678"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="pl-9 bg-black/40 border-white/15 text-white placeholder:text-white/30"

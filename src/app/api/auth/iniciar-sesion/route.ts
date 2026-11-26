@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import {
   createUserToken,
+  normalizeCedula,
   setSessionCookie,
   verifyPassword,
 } from "@/lib/user-auth";
@@ -30,25 +31,41 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: "Solicitud inválida" }, { status: 400 });
     }
 
-    const email = String(body.email || "").trim().toLowerCase();
+    const identificador = String(body.email || "").trim();
     const password = String(body.password || "");
 
-    if (!email || !password) {
+    if (!identificador || !password) {
       return NextResponse.json(
-        { error: "Correo y contraseña son obligatorios" },
+        { error: "Correo (o cédula) y contraseña son obligatorios" },
         { status: 400 }
       );
     }
 
-    const user = await db.user.findUnique({
-      where: { email },
-      select: { id: true, email: true, nombre: true, passwordHash: true },
-    });
+    // Identificador: correo (contiene @) O cédula (búsqueda vía Runner vinculado)
+    let user: { id: string; email: string; nombre: string; passwordHash: string } | null =
+      null;
 
-    // Mensaje genérico: no revelar si el correo existe o no
+    if (identificador.includes("@")) {
+      const email = identificador.toLowerCase();
+      user = await db.user.findUnique({
+        where: { email },
+        select: { id: true, email: true, nombre: true, passwordHash: true },
+      });
+    } else {
+      const cedula = normalizeCedula(identificador);
+      if (cedula.length >= 5) {
+        const byRunner = await db.user.findFirst({
+          where: { runner: { cedula } },
+          select: { id: true, email: true, nombre: true, passwordHash: true },
+        });
+        user = byRunner;
+      }
+    }
+
+    // Mensaje genérico: no revelar si el identificador existe o no
     if (!user || !verifyPassword(password, user.passwordHash)) {
       return NextResponse.json(
-        { error: "Correo o contraseña incorrectos" },
+        { error: "Correo/cédula o contraseña incorrectos" },
         { status: 401 }
       );
     }

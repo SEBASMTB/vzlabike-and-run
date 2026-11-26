@@ -18,9 +18,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import crypto from "crypto";
+import { normalizeCedula } from "@/lib/cedula";
 
+// Secreto de las sesiones de atleta: AUTH_SECRET (dedicado) con fallback
+// a TOKEN_SECRET (infra existente) y, al final, al valor de desarrollo.
 const TOKEN_SECRET =
-  process.env.TOKEN_SECRET || "vzlabike-admin-secret-key";
+  process.env.AUTH_SECRET ||
+  process.env.TOKEN_SECRET ||
+  "vzlabike-admin-secret-key";
 export const USER_COOKIE = "vbr_user_token";
 const TOKEN_EXPIRY_DAYS = 30;
 
@@ -41,13 +46,9 @@ export interface SessionUser {
 
 // ── Cédula ─────────────────────────────────────────────────────
 
-/** Normaliza la cédula: "v- 12.345.678" -> "V12345678".
- *  Mismo criterio que el importador (prisma/import-runners.ts)
- *  para garantizar la vinculación por cédula en un solo formato. */
-export function normalizeCedula(value: string | null | undefined): string {
-  if (!value) return "";
-  return value.trim().replace(/[\s.\-]/g, "").toUpperCase();
-}
+/** Normaliza la cédula (convención única de src/lib/cedula.ts):
+ *  "v- 12.345.678" -> "V12345678". Re-exportado para compatibilidad. */
+export { normalizeCedula };
 
 // ── Contraseñas (scrypt) ───────────────────────────────────────
 

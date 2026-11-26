@@ -24,7 +24,15 @@ import {
 function RegistrarseForm() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const redirect = searchParams.get("redirect") || "/mi-perfil";
+
+  /** Anti open-redirect: solo rutas internas (empiezan con "/" y no "//") */
+  const safeRedirect = (raw: string | null): string => {
+    if (raw && raw.startsWith("/") && !raw.startsWith("//") && !raw.includes("://")) {
+      return raw;
+    }
+    return "/mi-perfil";
+  };
+  const redirect = safeRedirect(searchParams.get("redirect"));
 
   const [nombre, setNombre] = useState("");
   const [apellido, setApellido] = useState("");
