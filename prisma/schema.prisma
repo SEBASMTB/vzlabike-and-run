@@ -49,6 +49,27 @@ model Runner {
 
   // --- Relaciones ---
   registrations Registration[]
+  user          User?
+}
+
+/// Usuario de la comunidad — Cuenta de acceso de la comunidad VBR.
+/// Un usuario puede estar vinculado a un Runner por cédula: al registrarse
+/// con su cédula, si existe en Runner se vincula automáticamente para
+/// desplegar su historial y su ficha personal en "Mi Perfil".
+model User {
+  id           String   @id @default(cuid())
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  // --- Identificación de la cuenta ---
+  email        String   @unique
+  passwordHash String   // scrypt: salt:hash (hex)
+  nombre       String   @default("") // Nombre a mostrar en la interfaz
+  role         String   @default("user") // user | admin (futuro)
+
+  // --- Vinculación con el historial deportivo ---
+  runnerId String? @unique
+  runner   Runner? @relation(fields: [runnerId], references: [id], onDelete: SetNull)
 }
 
 /// Evento Deportivo — Carrera, triatlón, ciclismo, etc.

@@ -98,6 +98,20 @@ CREATE TABLE IF NOT EXISTS "Runner" (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS "Runner_cedula_key" ON "Runner"("cedula");
 
+CREATE TABLE IF NOT EXISTS "User" (
+    "id" TEXT NOT NULL PRIMARY KEY,
+    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" DATETIME NOT NULL,
+    "email" TEXT NOT NULL,
+    "passwordHash" TEXT NOT NULL,
+    "nombre" TEXT NOT NULL DEFAULT '',
+    "role" TEXT NOT NULL DEFAULT 'user',
+    "runnerId" TEXT,
+    FOREIGN KEY ("runnerId") REFERENCES "Runner"("id") ON DELETE SET NULL ON UPDATE CASCADE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS "User_email_key" ON "User"("email");
+CREATE UNIQUE INDEX IF NOT EXISTS "User_runnerId_key" ON "User"("runnerId");
+
 CREATE TABLE IF NOT EXISTS "Product" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "eventId" TEXT,
@@ -430,6 +444,16 @@ const EXPECTED_COLUMNS: Record<string, Record<string, string>> = {
     contactoEmergenciaTelefono: 'TEXT',
     contactoEmergenciaParentesco: 'TEXT',
     alergiasCondiciones: 'TEXT',
+    createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
+    updatedAt: 'DATETIME NOT NULL',
+  },
+  User: {
+    id: 'TEXT NOT NULL PRIMARY KEY',
+    email: 'TEXT NOT NULL',
+    passwordHash: 'TEXT NOT NULL',
+    nombre: "TEXT NOT NULL DEFAULT ''",
+    role: "TEXT NOT NULL DEFAULT 'user'",
+    runnerId: 'TEXT',
     createdAt: 'DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP',
     updatedAt: 'DATETIME NOT NULL',
   },
