@@ -170,7 +170,7 @@ export function EventCard({
             size="lg"
             className="gradient-primary text-white border-0 hover:opacity-90"
           >
-            Ver Detalles
+            Inscribirme
             <ArrowRight className="size-4" />
           </Button>
         </div>

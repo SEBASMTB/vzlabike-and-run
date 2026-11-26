@@ -1,8 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter, usePathname } from "next/navigation";
-import { Menu, X, Phone, ChevronRight } from "lucide-react";
+import { Menu, X, Phone, ChevronRight, User as UserIcon, LogIn, LogOut, UserCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -21,6 +21,35 @@ export function Header() {
   const router = useRouter();
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  // ── Sesión de la comunidad ────────────────────────────────
+  const [session, setSession] = useState<{ nombre: string } | null>(null);
+
+  useEffect(() => {
+    fetch("/api/auth/me")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (data?.user) {
+          setSession({ nombre: data.user.nombre || data.user.email });
+        }
+      })
+      .catch(() => {});
+  }, []);
+
+  /** redirect para volver a la página actual tras iniciar sesión */
+  const loginHref = `/iniciar-sesion${
+    pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : ""
+  }`;
+  const registerHref = `/registrarse${
+    pathname && pathname !== "/" ? `?redirect=${encodeURIComponent(pathname)}` : ""
+  }`;
+
+  const cerrarSesion = async () => {
+    await fetch("/api/auth/cerrar-sesion", { method: "POST" }).catch(() => {});
+    setSession(null);
+    setMobileOpen(false);
+    router.push("/");
+  };
 
   const isHomePage = pathname === "/";
 
@@ -132,6 +161,54 @@ export function Header() {
                 <span className="hidden md:inline">+58 412-016-2685</span>
               </a>
 
+              {/* ── Acceso de la comunidad ── */}
+              {session ? (
+                // Con sesión: Mi Perfil + Cerrar sesión
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                    onClick={() => router.push("/mi-perfil")}
+                  >
+                    <UserCircle className="size-4" />
+                    <span className="hidden lg:inline max-w-[110px] truncate">
+                      {session.nombre}
+                    </span>
+                    <span className="lg:hidden">Mi Perfil</span>
+                  </Button>
+                  <button
+                    onClick={cerrarSesion}
+                    title="Cerrar sesión"
+                    aria-label="Cerrar sesión"
+                    className="hidden md:inline-flex items-center justify-center size-9 rounded-md text-white/60 hover:text-red-400 hover:bg-red-500/10 transition-colors"
+                  >
+                    <LogOut className="size-4" />
+                  </button>
+                </div>
+              ) : (
+                // Sin sesión: Iniciar Sesión + Registrarse
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                    onClick={() => router.push(loginHref)}
+                  >
+                    <LogIn className="size-4" />
+                    <span className="hidden sm:inline">Iniciar Sesión</span>
+                  </Button>
+                  <Button
+                    size="sm"
+                    className="gradient-primary text-white border-0 hover:opacity-90"
+                    onClick={() => router.push(registerHref)}
+                  >
+                    <UserIcon className="size-4" />
+                    <span className="hidden sm:inline">Registrarse</span>
+                  </Button>
+                </div>
+              )}
+
               <Button
                 size="sm"
                 className="hidden md:inline-flex gradient-primary text-white border-0 hover:opacity-90"
@@ -198,20 +275,53 @@ export function Header() {
                     </a>
                   );
                 })}
-                <div className="border-t mt-2 pt-3">
-                  <Button
-                    className="w-full gradient-primary text-white border-0"
-                    onClick={() => {
-                      if (isHomePage) {
-                        const el = document.querySelector("#contacto");
-                        if (el) el.scrollIntoView({ behavior: "smooth" });
-                      } else {
-                        router.push("/#contacto");
-                      }
-                    }}
-                  >
-                    Solicitar Presupuesto
-                  </Button>
+                <div className="border-t mt-2 pt-3 space-y-2">
+                  {session ? (
+                    <>
+                      <Button
+                        className="w-full gradient-primary text-white border-0"
+                        onClick={() => {
+                          setMobileOpen(false);
+                          router.push("/mi-perfil");
+                        }}
+                      >
+                        <UserCircle className="size-4" />
+                        Mi Perfil
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                        onClick={cerrarSesion}
+                      >
+                        <LogOut className="size-4" />
+                        Cerrar sesión
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      <Button
+                        className="w-full gradient-primary text-white border-0"
+                        onClick={() => {
+                          setMobileOpen(false);
+                          router.push(registerHref);
+                        }}
+                      >
+                        <UserIcon className="size-4" />
+                        Registrarse
+                      </Button>
+                      <Button
+                        variant="outline"
+                        className="w-full border-white/25 bg-white/5 text-white hover:bg-white/10 hover:text-white"
+                        onClick={() => {
+                          setMobileOpen(false);
+                          router.push(loginHref);
+                        }}
+                      >
+                        <LogIn className="size-4" />
+                        Iniciar Sesión
+                      </Button>
+                    </>
+                  )}
                 </div>
               </nav>
             </div>
